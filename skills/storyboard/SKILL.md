@@ -1,0 +1,52 @@
+---
+name: storyboard
+description: "Threads 向け縦型動画の企画と絵コンテ。言いたいことを1文にし、型（物語/紹介）と尺を決め、カット表（動作1つ・カメラ1つ・ナレ・字幕）とラフ画像を作り、動画プロンプトを基準表で自己採点してから承認に出す。Use when planning a short video, writing a storyboard or cut list, drafting narration lines, or preparing the approval packet (\"企画\" \"絵コンテ\" \"コンテ\" \"カット割り\" \"ナレ原稿\" \"storyboard\")."
+---
+
+# storyboard — 企画・絵コンテ・承認パケット
+
+
+## 1. 企画（brief.md）
+- **言いたいことを1文で**書く（例：「仕事の人が畑に挑むと、バテるけど、ちゃんと実る」）。
+- **型**を決める：物語（10〜15秒・3カット前後・つかみ→ズレ→オチ）か、紹介（20〜30秒・5カット前後）。
+- **誰に向けるか**と、**見終わった人にしてほしいこと**（例：リンクを押して話しかける）。
+- ありがちな案を10個書き出して禁止リストにし、それを避けた案を3つ出して、人に選んでもらう。
+
+## 2. カット表（shots.json）
+各カットに次を埋める。空欄があるカットは生成に進めない。
+- `line`：ナレ1文。**1秒あたり5〜6字**（3秒のカットなら15〜18字）。
+- `caption`：字幕。1枚1〜2行・1行15字前後。強調は `[[ ]]` で1語だけ。
+- `action`：被写体の動作を**1つ**。`camera`：カメラの動きを**1つ**。
+- `prompt`：動画プロンプト（下の型）。`model`：`generate-cuts` の表から選ぶ。
+- 冒頭1.5秒で手を止めさせる絵か一言を、C1 に置く。
+
+### 動画プロンプトの型（英語で書く）
+```
+<画風を1文で固定>. <被写体と見た目（キャラ設定シートと同じ文言）>.
+<動作を1つ、動詞で具体的に>. <カメラの動きを1つ>. <光と空気>.
+Keep the exact art style, faces, outfits and props of the first frame.
+Natural motion, no morphing, no extra characters, no objects appearing in hands, no text, no speech bubbles, no logos.
+```
+- 「〜しない」の指定は最後の1文にまとめ、それ以外は肯定の形で書く（「建物なし」ではなく「何もない草原」）。
+- 秒刻みの細かい指定は書かない（守られないことが多い）。1カット1動作にする方が確実。
+
+## 3. 自己採点（承認に出す前に必ず行う）
+各カットのプロンプトを `references/prompt-rubric.md` で採点する。**必須項目に1つでも×があれば、直してから出す。**
+お金がかかる前に失敗を減らすための工程です。
+
+## 4. ラフ画像（storyboard/）
+- 構図の確認用のラフを作る。本番の起点画像はあとで `character-sheet` で清書する。
+- **ラフも有料（1枚約6円）。作る前に「何枚・いくら」を伝えて了承をもらう。** 了承が無ければ、文字だけのカット表で G1 に進む。
+- `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gen_image.py --project <dir> --model seedream45 --size 1440x2560 --prompt "<rough storyboard frame ...>" --out storyboard/c01.png`
+- 1枚目を作って画風を確認したら、残りは1枚目を参照画像（`--image storyboard/c01.png`）にして画風をそろえる。
+- `storyboard/index.html` に、カットごとの画像・尺・カメラ・ナレ・字幕を並べて `open` で見せる。
+
+## 5. 承認パケット（G1）
+次の5点を**1回でまとめて**見せ、明示の OK をもらう。
+1. 言いたいこと1文・型・総尺
+2. カット表（画像・動作・カメラ・ナレ・字幕）
+3. ナレ原稿の全文（読みに注意が要る語は印を付ける）
+4. 自己採点の結果
+5. 見積もり：`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gen_video.py --project <dir> --all --dry-run --with-draft`（下書きと本番の合計）
+
+修正の指示は、ここで文字で直す。生成してから直すより安い。

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Threads Video Studio 設定</title>
+<style>
+  /* Offline setup form. Nothing is sent anywhere: values stay in this page until you download the file. */
+  :root { --bg:#f6f5f0; --card:#fff; --ink:#23262c; --mut:#5d626c; --line:#dcd9cf; --acc:#2f5bb7; --ok:#0a8a4a; --warn:#b3261e;
+          --font:"Hiragino Sans","Yu Gothic","Noto Sans JP",system-ui,sans-serif; --mono:ui-monospace,Menlo,monospace; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16181c; --card:#1f2228; --ink:#ebe9e3; --mut:#a3a8b1; --line:#353943; --acc:#8fb0f2; --ok:#4fd18a; --warn:#f2938a; color-scheme:dark; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.7 var(--font); }
+  main { max-width:760px; margin:0 auto; padding:32px 18px 64px; display:grid; gap:22px; }
+  h1 { font-size:26px; margin:0; } h2 { font-size:17px; margin:0; }
+  p { margin:0; color:var(--mut); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px 20px; display:grid; gap:14px; }
+  label { display:grid; gap:4px; }
+  .name { font-weight:600; } .name small { font-weight:400; color:var(--mut); font-family:var(--mono); font-size:12px; margin-left:6px; }
+  .hint { font-size:13px; color:var(--mut); }
+  input { font:14px var(--mono); padding:9px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink); width:100%; }
+  input:focus { outline:2px solid var(--acc); outline-offset:1px; }
+  .row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  button { font:600 14px var(--font); padding:10px 16px; border-radius:8px; border:1px solid var(--acc); background:var(--acc); color:#fff; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--acc); }
+  .msg { font-size:13px; color:var(--ok); min-height:1.2em; }
+  pre { font:12.5px/1.5 var(--mono); background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; overflow-x:auto; white-space:pre-wrap; word-break:break-all; margin:0; }
+  ol { margin:0; padding-left:1.3em; display:grid; gap:4px; }
+  .warn { color:var(--warn); font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <header style="display:grid;gap:8px">
+    <h1>Threads Video Studio 設定</h1>
+    <p>API キーなどを入力して、設定ファイル <code>config.json</code> を作ります。このページはあなたの PC の中だけで動き、入力した値はどこにも送信されません。</p>
+  </header>
+
+  <section class="card">
+    <h2>生成に使うキー</h2>
+    <label><span class="name">fal.ai API キー<small>fal_key</small></span>
+      <input id="fal_key" type="password" autocomplete="off" spellcheck="false">
+      <span class="hint">画像・動画・BGM の生成に使います。<a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener">fal.ai のキー発行ページ</a></span></label>
+    <label><span class="name">ElevenLabs API キー<small>elevenlabs_api_key</small></span>
+      <input id="elevenlabs_api_key" type="password" autocomplete="off" spellcheck="false">
+      <span class="hint">日本語ナレーションと BGM に使います。<a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">ElevenLabs のキー発行ページ</a></span></label>
+    <label><span class="name">ナレーションの声 ID<small>narrator_voice_id</small></span>
+      <input id="narrator_voice_id" type="text" autocomplete="off" spellcheck="false">
+      <span class="hint">ElevenLabs のライブラリから日本語ネイティブの声を選び、その ID を入れます（任意）。</span></label>
+  </section>
+
+  <section class="card">
+    <h2>投稿に使う設定（動画を作るだけなら空でよい）</h2>
+    <label><span class="name">Threads アクセストークン<small>threads_access_token</small></span>
+      <input id="threads_access_token" type="password" autocomplete="off" spellcheck="false">
+      <span class="hint">予約投稿と反応の取り込みに使う長期トークンです。</span></label>
+    <label><span class="name">誘導先の URL<small>cta_url</small></span>
+      <input id="cta_url" type="url" placeholder="https://line.me/R/ti/p/@xxxx" autocomplete="off">
+      <span class="hint">投稿本文に入れるリンクです（例：公式 LINE）。投稿ごとに <code>?t=&lt;作品名&gt;</code> が付きます。</span></label>
+    <label><span class="name">動画の受け渡しに使う S3 バケット<small>media_bucket</small></span>
+      <input id="media_bucket" type="text" autocomplete="off" spellcheck="false">
+      <span class="hint">非公開のバケットに置き、1時間だけ有効な URL を Threads に渡します。中身は1日で消えます。</span></label>
+    <div class="row">
+      <label style="flex:1 1 200px"><span class="name">AWS プロファイル<small>aws_profile</small></span><input id="aws_profile" type="text" autocomplete="off"></label>
+      <label style="flex:1 1 200px"><span class="name">AWS リージョン<small>aws_region</small></span><input id="aws_region" type="text" placeholder="ap-northeast-1" autocomplete="off"></label>
+    </div>
+    <label><span class="name">作業フォルダ<small>workspace</small></span>
+      <input id="workspace" type="text" placeholder="~/threads-videos" autocomplete="off">
+      <span class="hint">動画のプロジェクト・投稿の予定表・振り返りレポートを置く場所です。</span></label>
+  </section>
+
+  <section class="card">
+    <h2>設定ファイルを保存する</h2>
+    <div class="row">
+      <button id="dl" type="button">config.json を保存</button>
+      <button id="show" type="button" class="ghost">中身を表示</button>
+      <span class="msg" id="msg" role="status"></span>
+    </div>
+    <pre id="out" hidden></pre>
+    <p class="warn">保存したファイルには API キーがそのまま入ります。人に送ったり、Git に入れたりしないでください。</p>
+    <h2>置き場所</h2>
+    <ol>
+      <li><b>Claude Code（Mac）</b>：<code>~/.config/threads-video-studio/config.json</code> に置くか、ターミナルで <code>python3 &lt;plugin&gt;/scripts/setup.py import ~/Downloads/config.json --delete</code> を実行します。</li>
+      <li><b>Claude Cowork</b>：Cowork に接続している作業フォルダの直下に <code>tvs-config.json</code> という名前で置きます。Claude はそのフォルダの設定を読みます。</li>
+      <li>Claude Code のプラグイン設定画面（<code>/plugin</code> → Configure options）に入力した場合は、このファイルは不要です。</li>
+    </ol>
+  </section>
+</main>
+<script>
+  const KEYS = ["fal_key","elevenlabs_api_key","narrator_voice_id","threads_access_token","cta_url","media_bucket","aws_profile","aws_region","workspace"];
+  function collect() {
+    const o = {};
+    for (const k of KEYS) { const v = document.getElementById(k).value.trim(); if (v) o[k] = v; }
+    return o;
+  }
+  function say(t) { document.getElementById("msg").textContent = t; }
+  document.getElementById("dl").addEventListener("click", () => {
+    const o = collect();
+    if (!Object.keys(o).length) { say("まだ何も入力されていません"); return; }
+    const blob = new Blob([JSON.stringify(o, null, 1)], {type: "application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "config.json"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    say(Object.keys(o).length + " 項目を config.json に保存しました");
+  });
+  document.getElementById("show").addEventListener("click", () => {
+    const o = collect(); const masked = {};
+    for (const [k, v] of Object.entries(o)) masked[k] = /key|token/.test(k) ? v.slice(0, 3) + "…（" + v.length + "文字）" : v;
+    const pre = document.getElementById("out"); pre.hidden = false; pre.textContent = JSON.stringify(masked, null, 1);
+  });
+</script>
+</body>
+</html>

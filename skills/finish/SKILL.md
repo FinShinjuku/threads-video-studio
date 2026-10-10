@@ -1,0 +1,35 @@
+---
+name: finish
+description: "生成したカット・ナレ・BGM から完成動画を組み立てる。シリーズで使い回す決まった BGM（シグネチャー曲）、ナレ中の音量下げ、丸ゴシックの字幕、最後の CTA ボタンを HyperFrames で組み、0.5秒ごとの全コマで最終確認し、投稿用に圧縮する。Use when assembling the final video, adding captions/BGM/call-to-action, rendering, or doing the final QA (\"仕上げ\" \"字幕\" \"BGM\" \"書き出し\" \"完成させて\" \"render\")."
+---
+
+# finish — BGM・字幕・CTA・書き出し・最終確認
+
+
+## 1. BGM（シリーズで使い回す）
+- 毎回作らず、**シグネチャー曲を3本**決めて使い回す（例：前向き・温かい・静か）。初回だけ3本作って人に選んでもらう。
+  ```bash
+  python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gen_bgm.py --project <dir> --seconds 45 \
+    --prompt "Warm acoustic pop, ukulele and light piano, 100 BPM, hopeful, clear resolving ending, no vocals, leaves room for narration"
+  ```
+- ボーカル無し。ナレと同じ帯域の楽器が前に出ない。最後は解決して終わる曲にする。
+- 選んだ曲を `bgm/bgm.mp3` に置く。シグネチャー曲はワークスペースの `bgm-library/` に保存して使い回す。
+- 決め台詞やつかみの瞬間を、曲の小節の頭に合わせると気持ちよく見える。
+
+## 2. 組み立てと書き出し
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py --project <dir> --render
+```
+- カットは `shots.json` の `start`・`dur` で並ぶ。素材が足りないと、最後のコマで止めて埋め、**0.4秒を超えると WARN** が出る。その場合は、尺を詰めるか、カットを長めに作り直す。
+- 字幕は `caption`（無ければ `line` を自動で分割）。丸ゴシックの白文字に柔らかい縁。強調は `[[ ]]` の1語だけ黄色。上下15%と右端を避ける。
+- 最後のカットに CTA ボタン（`shots.json` の `cta`）。社名・ロゴは入れない。
+- BGM はナレの間だけ -20dB 下げ、冒頭はフェードイン、最後はフェードアウトする。
+- 出力：`final/<slug>-final.mp4`（1080×1920）と、投稿用に軽くした `final/<slug>-post.mp4`。
+
+## 3. 最終確認（見せる前に必ず）
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/qa_frames.py --project <dir> --final   # 0.5秒ごとの全コマ
+```
+- 字幕の欠け・はみ出し・読みやすさ／静止して見える区間／主役が画面の外／名前やロゴが出ていないか。
+- 無音で見て意味が通るか（字幕だけで分かるか）、音ありで見て気持ちの山が来るか。
+- 合格したら人に見せる（Mac は `open -R final/<slug>-final.mp4` で Finder に表示。それ以外はファイルの場所を伝える） → **G2 承認**。

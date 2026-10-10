@@ -1,0 +1,16 @@
+{
+  "name": "threads-video-studio",
+  "owner": {
+    "name": "FinShinjuku"
+  },
+  "metadata": {
+    "description": "Short vertical AI videos for Threads: storyboard, generation, narration, QA, finishing, scheduled posting and review."
+  },
+  "plugins": [
+    {
+      "name": "threads-video-studio",
+      "source": "./",
+      "description": "Short vertical AI videos for Threads: storyboard, generation, narration, QA, finishing, scheduled posting and review."
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+# secrets — never commit
+config.json
+tvs-config.json
+*.task
+*.task.locked
+.env
+# python / os
+__pycache__/
+*.pyc
+.DS_Store
+# generated media
+*.mp4
+*.mp3
+*.wav
+node_modules/

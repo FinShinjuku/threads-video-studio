@@ -1,0 +1,36 @@
+---
+name: narration
+description: "日本語ナレーションを ElevenLabs v3 で作る。生成前に読み間違いを機械で洗い出して読み替え辞書に入れ、原稿全体を1回で通して生成して声色をそろえ、文字ごとの時刻からカットの尺を決める。Use when writing or generating Japanese narration, checking readings/mispronunciations, choosing a voice, or timing cuts to the voice (\"ナレーション\" \"ナレ\" \"読み上げ\" \"読み間違い\" \"声\" \"narration\" \"voice-over\")."
+---
+
+# narration — 読みの確認・通し生成・尺の確定
+
+
+## 1. 原稿
+- 1秒あたり5〜6字。速度を上げて詰め込まない（詰まって聞こえる）。足りなければ原稿を削る。
+- 字幕と同じ字面にする（読みの補正は辞書で行い、原稿の字面は変えない）。
+
+## 2. 読みの事前チェック（生成の前に必ず）
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/yomi_check.py --project <dir>            # 各行の読みと要注意語の一覧
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/yomi_check.py --project <dir> --suggest  # 読み替え候補を voice/yomi.json に追記
+```
+- 英字・数字・記号・読みが複数ある漢字（例：創る、生、上手、方）を確認する。
+- 直したい読みは `voice/yomi.json` に `{"表記": "よみ"}` で入れる（例：`{"創る": "つくる", "AI": "エーアイ"}`）。発話にだけ使われ、字幕は元の字面のまま。
+- 通しで1回生成するので、1か所読み間違えると全部作り直しになる。ここで拾うのが一番安い。
+
+## 3. 声の選び方
+- ElevenLabs のライブラリから、**日本語ネイティブの声**を選ぶ（英語ベースの声は日本語が不自然）。
+- 物語系は語り手の声、キャラの紹介系はキャラの声。シリーズで声を固定する（設定 `narrator_voice_id`）。
+
+## 4. 通しで1回生成（声色をそろえる）
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gen_voice.py --project <dir> --voice-id <id> --tag "[cheerfully]"
+```
+- 全行を1回のリクエストで生成し、感情タグは冒頭の1つだけ。**行ごとに別々に作らない**（声色がばらつく）。
+- 出力：`voice/all.mp3`、文字ごとの時刻 `align.json`、各行の開始・終了 `lines.json`。
+- `shots.json` の各カットの `start`・`dur` が自動で入る（次の行の開始の0.15秒前で切り替え、最後は +1.0秒）。
+
+## 5. 聞いて確認
+- 通しで聞き、読み間違い・不自然な間・詰まりがあれば、辞書か原稿を直して**全体を作り直す**（数円〜数十円）。
+- 合格したら、カットの尺が決まる。動画の生成はこのあと（尺が決まってから）。
