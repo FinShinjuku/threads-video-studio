@@ -52,7 +52,27 @@ API キーの入力画面が開きます（秘密の項目は伏せ字）。あ�
 Homebrew が無い場合は、先に https://brew.sh の手順で入れてください。
 入ったかどうかは、Claude に「studio_status を見て」と頼むか、`python3 scripts/setup.py status` で確かめられます。
 
-使うサービスのアカウント：fal.ai と ElevenLabs（必須）、Threads API と AWS（投稿するなら）。詳しくは [CONNECTORS.md](CONNECTORS.md) を見てください。
+## 必要なアカウント・契約（ご自身で用意してください）
+
+このプラグインは、下のサービスのアカウントと契約を使います。どれも利用者ご本人の名義で作ってください。料金や条件は2026年10月時点のものなので、契約の前に各社のページで確かめてください。
+
+| サービス | 何に使うか | 必要なアカウント・契約 | 必須 | 主な手順 |
+|---|---|---|---|---|
+| Claude（Anthropic） | プラグイン・拡張を動かす本体 | Claude の有料プラン（Pro・Max・Team など。Cowork と Claude Code が使えるもの） | 必須 | https://claude.ai でプランに入り、Claude デスクトップ（Cowork）か Claude Code を入れる |
+| fal.ai | 画像・動画・BGM の生成 | fal.ai のアカウント。従量課金で、クレジットの購入（カード登録）が必要 | 必須 | https://fal.ai で登録 → クレジットを購入 → Auto top-up（自動チャージ）をオン → API キーを発行 |
+| ElevenLabs | 日本語ナレーション、BGM | ElevenLabs のアカウント。動画を商用で使うなら有料プラン（Starter 以上）。BGM（Music）も有料プランで使う | 必須 | https://elevenlabs.io で登録 → プランを選ぶ → API キーを発行 → Voice Library から日本語の声を追加 |
+| Threads | 投稿先 | Threads のアカウント（Instagram のアカウントでログインして作る） | 投稿するなら | Instagram アカウントで Threads に登録する |
+| Meta for Developers | Threads API で予約投稿・反応の取り込み | Meta 開発者アカウントと、Threads の用途で作ったアプリ | 投稿するなら | https://developers.facebook.com で開発者登録 → アプリを作成（用途：Threads API にアクセス）→ 権限 `threads_basic`・`threads_content_publish`・`threads_manage_insights`・`threads_read_replies` を付ける → 自分の Threads アカウントをテスターに追加 → 長期アクセストークン（60日。延長可）を発行 |
+| AWS | 動画を Threads に渡すための一時置き場（S3） | AWS アカウント（カード登録）と、S3 を使える IAM ユーザーまたはプロファイル | 動画を自動投稿するなら | https://aws.amazon.com で登録 → IAM ユーザーを作る → `aws configure` → `python3 scripts/media_host.py --create-bucket` |
+| LINE 公式アカウント | 投稿から誘導する先（例） | LINE 公式アカウント（LINE Business ID）。誘導先は自社サイトなど任意の URL でもよい | 任意 | https://www.linebiz.com/jp/ で開設 → 友だち追加の URL を `cta_url` に入れる |
+
+アカウントが要らないもの：Homebrew・Python・ffmpeg・Node.js・HyperFrames（`npx` で動く書き出しの道具）・字幕のフォント（Zen Maru Gothic）。
+
+- 動画を作るだけなら、Claude・fal.ai・ElevenLabs の3つで足ります。
+- 投稿まで自動にするなら、Threads・Meta for Developers・AWS も必要です。
+- 発行したキーやトークンは、拡張の設定画面（またはプラグインの設定画面）にだけ入れてください。チャットに貼ったり、人に送ったりしないでください。
+
+各サービスの設定項目との対応は [CONNECTORS.md](CONNECTORS.md) にあります。
 動作を確かめているのは macOS です。定期実行は、macOS の launchd か Cowork のスケジュールタスクを使います。
 
 ## スキル（Claude への手順書）
