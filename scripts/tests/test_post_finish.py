@@ -1,6 +1,6 @@
-"""Offline tests for finishing and posting: assemble (captions, ducking), threads_post, threads_insights.
+"""仕上げと投稿のオフラインテスト: assemble（字幕・BGM の音量下げ）、threads_post、threads_insights。
 
-No network, no API, no ffmpeg. Run: python3 -m unittest discover -s scripts/tests
+ネットワーク・API・ffmpeg は使わない。実行: python3 -m unittest discover -s scripts/tests
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-os.environ.setdefault("TVS_CONFIG_DIR", tempfile.mkdtemp())  # never touch the real config
+os.environ.setdefault("TVS_CONFIG_DIR", tempfile.mkdtemp())  # 本物の設定には触れない
 
 import assemble  # noqa: E402
 import threads_api as api  # noqa: E402
@@ -26,7 +26,7 @@ NOW = dt.datetime(2026, 10, 10, 12, 0, tzinfo=dt.timezone(dt.timedelta(hours=9))
 
 
 class FakeGraph:
-    """Records calls; behaves like the Threads Graph API for one VIDEO post."""
+    """呼び出しを記録する。VIDEO 投稿1件分について Threads Graph API のように振る舞う。"""
 
     def __init__(self, fail_at: str | None = None, statuses=("IN_PROGRESS", "FINISHED")):
         self.calls: list[tuple[str, str, dict]] = []
@@ -112,7 +112,7 @@ class PublishDueTest(unittest.TestCase):
         self.assertEqual(back["status"], "published")
         self.assertEqual(back["published_id"], "2002")
         self.assertTrue(back["permalink"].startswith("https://"))
-        # second run: nothing is sent again
+        # 2回目の実行: 何も送り直さない
         g2 = FakeGraph()
         tp.publish_due(self.q, False, 3, graph=g2, uid="42", sleep=lambda s: None, now=NOW)
         self.assertEqual(g2.calls, [])
@@ -153,7 +153,7 @@ class PublishDueTest(unittest.TestCase):
         self.assertEqual(len(s["unknown"]), 1)
         back = tp.load_queue(self.q)[0]
         self.assertEqual(back["status"], "publishing")
-        self.assertIn("outcome unknown", back["error"])
+        self.assertIn("結果不明", back["error"])
 
     def test_container_error_marks_failed(self):
         s = self.run_due([item()], FakeGraph(fail_at="container_error"))
@@ -183,12 +183,12 @@ class TextValidationTest(unittest.TestCase):
         self.assertEqual(tp.validate_text("こんにちは https://example.com"), [])
 
     def test_too_long(self):
-        self.assertTrue(any("max 500" in e for e in tp.validate_text("あ" * 501)))
+        self.assertTrue(any("上限 500" in e for e in tp.validate_text("あ" * 501)))
         self.assertEqual(tp.validate_text("あ" * 500), [])
 
     def test_too_many_links(self):
         text = " ".join(f"https://example.com/{i}" for i in range(6))
-        self.assertTrue(any("links" in e for e in tp.validate_text(text)))
+        self.assertTrue(any("リンク" in e for e in tp.validate_text(text)))
 
     def test_empty_and_topic(self):
         self.assertTrue(tp.validate_text("  "))
@@ -211,17 +211,17 @@ class DraftApproveTest(unittest.TestCase):
         self.assertEqual(q[0]["status"], "draft")
         self.assertEqual(q[0]["hook"], "一行目のフック")
         self.assertEqual(q[0]["format"], "story")
-        with self.assertRaises(SystemExit):  # --note is mandatory
+        with self.assertRaises(SystemExit):  # --note は必須
             tp.main(args + ["approve", "t001-a", "--by", "Reviewer"])
         self.assertEqual(tp.main(args + ["approve", "t001-a", "--by", "Reviewer", "--note", "OK、これで投稿して"]), 0)
         q = tp.load_queue(ws / "posts.json")
         self.assertEqual(q[0]["status"], "approved")
         self.assertEqual(q[0]["approval_note"], "OK、これで投稿して")
-        # changing the time removes the approval
+        # 時刻を変えると承認が外れる
         self.assertEqual(tp.main(args + ["schedule", "t001-a", "--at", "2026-10-12 09:00"]), 0)
         self.assertEqual(tp.load_queue(ws / "posts.json")[0]["status"], "draft")
         self.assertEqual(tp.main(args + ["approve", "t001-a", "--by", "Reviewer", "--note", "OK"]), 0)
-        # editing an approved draft returns it to draft and clears the approval
+        # 承認済みを編集すると下書きに戻り、承認が消える
         self.assertEqual(tp.main(args + ["draft", "--project", str(proj), "--text-file", "post.txt"]), 0)
         q = tp.load_queue(ws / "posts.json")
         self.assertEqual(len(q), 1)
@@ -246,7 +246,7 @@ class LockTest(unittest.TestCase):
             with self.assertRaises(api.LockHeld):
                 with api.FileLock(p):
                     pass
-        with api.FileLock(p):  # released afterwards
+        with api.FileLock(p):  # 抜けたあとは外れている
             pass
 
 
@@ -322,7 +322,7 @@ class LearningsTest(unittest.TestCase):
         self.assertEqual(by["48h"]["verdict"], ins.GREW)
         self.assertEqual(by["48h"]["insight"], "")
         self.assertEqual(by["7d"]["verdict"], ins.TOO_FEW)
-        # already reviewed rows are not created again
+        # 振り返り済みの行は作り直さない
         again = ins.build_learnings(posts, snaps, existing + rows, NOW)
         self.assertEqual(again, [])
 
@@ -359,17 +359,17 @@ class ApprovalHashTest(unittest.TestCase):
         for field, value in (("text", "changed"), ("topic", "別トピック"), ("scheduled_at", "2026-10-10 10:00")):
             it = self.approved()
             it[field] = value
-            self.assertIn("changed after approval", tp.check_before_publish(it), field)
+            self.assertIn("承認後に", tp.check_before_publish(it), field)
 
     def test_video_content_change_blocks(self):
         it = self.approved()
-        self.video.write_bytes(b"replaced video")  # same path, new content
-        self.assertIn("changed after approval", tp.check_before_publish(it))
+        self.video.write_bytes(b"replaced video")  # 同じパスで中身だけ違う
+        self.assertIn("承認後に", tp.check_before_publish(it))
 
     def test_media_url_change_blocks(self):
         it = item()
         it["media_url"] = "https://example.com/other.mp4"
-        self.assertIn("changed after approval", tp.check_before_publish(it))
+        self.assertIn("承認後に", tp.check_before_publish(it))
 
 
 class CtaLinkTest(unittest.TestCase):
@@ -418,7 +418,7 @@ class GraphSafetyTest(unittest.TestCase):
             self.assertTrue(req.full_url.startswith("https://graph.threads.net/v1.0/"))
 
     def test_refuses_absolute_or_odd_paths(self):
-        g = api.Graph("t", opener=lambda *a, **k: self.fail("must not send"))
+        g = api.Graph("t", opener=lambda *a, **k: self.fail("送ってはいけない"))
         for bad in ("https://evil.example/x", "//evil.example/x", "../me", "abc/threads", "42/threads?x=1",
                     "42/../me"):
             with self.assertRaises(RuntimeError):
@@ -476,10 +476,10 @@ class LockFallbackTest(unittest.TestCase):
 
     def test_stale_lock_is_removed(self):
         p = Path(tempfile.mkdtemp()) / ".lock"
-        p.write_text("999999 0")  # dead pid, ancient
+        p.write_text("999999 0")  # 死んだ pid で、とても古い
         with api.FileLock(p, use_fcntl=False):
             pass
-        p.write_text(f"{os.getpid()} 0")  # live pid but older than the stale limit
+        p.write_text(f"{os.getpid()} 0")  # 生きている pid だが、放置とみなす期限より古い
         with api.FileLock(p, use_fcntl=False):
             pass
 

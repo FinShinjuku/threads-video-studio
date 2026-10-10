@@ -1,6 +1,6 @@
 ---
 name: studio-setup
-description: "threads-video-studio の初期設定。fal.ai・ElevenLabs・Threads・S3 のキーと設定の入力方法を案内し、入力済みかを確認し、必要な道具（ffmpeg・Node・pyopenjtalk・AWS CLI）をそろえる。Use on first use, when a script says a setting is missing, or when the user asks how to enter API keys or connect services (\"初期設定\" \"APIキーを入れたい\" \"設定を確認\" \"setup\" \"configure keys\")."
+description: "threads-video-studio の初期設定。fal.ai・ElevenLabs・Threads・S3 のキーと設定の入力方法を案内し、入力済みかを確認し、必要な道具（ffmpeg・Node・pyopenjtalk・AWS CLI）をそろえる。使う場面：初めて使うとき、スクリプトが設定の不足を知らせたとき、API キーの入れ方やサービスのつなぎ方を聞かれたとき（「初期設定」「APIキーを入れたい」「設定を確認」）。"
 ---
 
 # studio-setup — キーの入力と準備

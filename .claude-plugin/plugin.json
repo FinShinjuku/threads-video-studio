@@ -1,7 +1,7 @@
 {
   "name": "threads-video-studio",
-  "version": "0.2.0",
-  "description": "Make short vertical AI videos for Threads (anime/illustration style, Japanese narration, captions, BGM, call-to-action), with human approval gates, frame-level QA, and scheduled auto-posting and review. Uses fal.ai, ElevenLabs and the Threads API.",
+  "version": "0.2.1",
+  "description": "Threads 向けの縦型 AI 動画（アニメ調・日本語ナレーション・字幕・BGM・誘導ボタン）を作り、予約投稿して振り返る。人の承認ゲート、コマ単位の確認、自動投稿つき。fal.ai・ElevenLabs・Threads API を使う。",
   "author": {
     "name": "FinShinjuku"
   },
@@ -22,59 +22,59 @@
   "userConfig": {
     "fal_key": {
       "type": "string",
-      "title": "fal.ai API key",
-      "description": "Used for image, video and music generation. Get it at https://fal.ai/dashboard/keys",
+      "title": "fal.ai API キー",
+      "description": "画像・動画・BGM の生成に使います。https://fal.ai/dashboard/keys で発行します。",
       "sensitive": true,
       "default": ""
     },
     "elevenlabs_api_key": {
       "type": "string",
-      "title": "ElevenLabs API key",
-      "description": "Used for Japanese narration (eleven_v3) and BGM. Get it at https://elevenlabs.io/app/settings/api-keys",
+      "title": "ElevenLabs API キー",
+      "description": "日本語ナレーション（eleven_v3）と BGM に使います。https://elevenlabs.io/app/settings/api-keys で発行します。",
       "sensitive": true,
       "default": ""
     },
     "threads_access_token": {
       "type": "string",
-      "title": "Threads access token",
-      "description": "Long-lived Threads API token for scheduled posting and insights. Leave empty if you only make videos.",
+      "title": "Threads アクセストークン",
+      "description": "予約投稿と反応の取り込みに使う長期トークンです。動画を作るだけなら空でかまいません。",
       "sensitive": true,
       "default": ""
     },
     "narrator_voice_id": {
       "type": "string",
-      "title": "Default narrator voice id",
-      "description": "ElevenLabs voice id used when a project does not specify one. Choose a native Japanese library voice.",
+      "title": "ナレーションの声 ID",
+      "description": "作品で指定しないときに使う ElevenLabs の声 ID です。日本語ネイティブの声を選んでください。",
       "default": ""
     },
     "cta_url": {
       "type": "string",
-      "title": "Call-to-action link",
-      "description": "Link placed in each post, e.g. your LINE official account URL. A per-post tag (?t=<slug>) is added automatically.",
+      "title": "誘導先の URL",
+      "description": "投稿本文に入れるリンク（例：公式 LINE の URL）。投稿ごとに ?t=<作品名> が付きます。",
       "default": ""
     },
     "workspace": {
       "type": "string",
-      "title": "Workspace folder",
-      "description": "Where video projects, the posting queue and reports are stored. Default: ~/threads-videos",
+      "title": "作業フォルダ",
+      "description": "作品・投稿の予定表・レポートを置く場所です。空なら ~/threads-videos。",
       "default": ""
     },
     "media_bucket": {
       "type": "string",
-      "title": "S3 bucket for posting videos (optional)",
-      "description": "Private bucket used to hand videos to the Threads API through 1-hour signed URLs. Objects expire after 1 day.",
+      "title": "S3 バケット（動画の自動投稿用・任意）",
+      "description": "動画を1時間だけ有効な URL で Threads に渡すための非公開のバケットです。中身は1日で消えます。",
       "default": ""
     },
     "aws_profile": {
       "type": "string",
-      "title": "AWS CLI profile (optional)",
-      "description": "Profile used with the bucket above.",
+      "title": "AWS プロファイル（任意）",
+      "description": "上のバケットに使う AWS CLI のプロファイル名です。",
       "default": ""
     },
     "aws_region": {
       "type": "string",
-      "title": "AWS region (optional)",
-      "description": "Region of the bucket above, e.g. ap-northeast-1.",
+      "title": "AWS リージョン（任意）",
+      "description": "上のバケットのリージョンです（例：ap-northeast-1）。",
       "default": ""
     }
   }

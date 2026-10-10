@@ -4,13 +4,13 @@
     "name": "FinShinjuku"
   },
   "metadata": {
-    "description": "Short vertical AI videos for Threads: storyboard, generation, narration, QA, finishing, scheduled posting and review."
+    "description": "Threads 向けの縦型 AI 動画づくり：企画・絵コンテ・生成・ナレーション・確認・仕上げ・予約投稿・振り返り。"
   },
   "plugins": [
     {
       "name": "threads-video-studio",
       "source": "./",
-      "description": "Short vertical AI videos for Threads: storyboard, generation, narration, QA, finishing, scheduled posting and review."
+      "description": "Threads 向けの縦型 AI 動画づくり：企画・絵コンテ・生成・ナレーション・確認・仕上げ・予約投稿・振り返り。"
     }
   ]
 }

@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""threads-video-studio MCP server (standard library only).
+"""threads-video-studio の MCP サーバー（標準ライブラリのみ）。
 
-Runs on the user's computer, either as
-  - the Claude Desktop / Cowork extension (MCP Bundle, settings entered in Customize > Connectors), or
-  - the Claude Code plugin connector (.mcp.json, settings entered in /plugin > Configure options).
+利用者のパソコン上で、次のどちらかとして動く:
+  - Claude Desktop / Cowork の拡張機能（MCP Bundle。設定は「カスタマイズ > コネクタ」で入力）
+  - Claude Code プラグインのコネクタ（.mcp.json。設定は /plugin > Configure options で入力）
 
-Every tool that calls a paid API runs here, on the host, with the keys from the settings form,
-so the keys never have to be copied into a chat, a sandbox or a shared folder.
-Tools take a project *slug* (folder name under the workspace), not a path, so the same call works
-from Claude Code and from Cowork's sandbox.
+有料 API を呼ぶツールはすべてここ（利用者のパソコン）で、設定画面のキーを使って動く。
+そのためキーをチャット・サンドボックス・共有フォルダにコピーする必要が無い。
+ツールはパスではなくプロジェクトの *スラッグ*（ワークスペース内のフォルダ名）を受け取るので、
+Claude Code からも Cowork のサンドボックスからも同じ呼び方で使える。
 
-Long operations (video generation, rendering, posting) run as background jobs; poll them with
-studio_job. Secrets are never returned: all output passes through common.redact-style scrubbing.
+時間のかかる処理（動画生成・書き出し・投稿）はバックグラウンドのジョブとして動かし、studio_job で
+進み具合を見る。秘密値は返さない。出力はすべて common.redact と同じやり方で秘密値を消してから返す。
 """
 
 from __future__ import annotations
@@ -31,13 +31,13 @@ sys.path.insert(0, str(SCRIPTS))
 import common  # noqa: E402
 
 PROTOCOL = "2025-06-18"
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 OPT_PREFIX = "TVS_OPT_"
 
 
-# ---------------------------------------------------------------- settings
+# ---------------------------------------------------------------- 設定
 def configured() -> dict[str, str]:
-    """Values entered in the settings form (unfilled placeholders are ignored)."""
+    """設定画面で入力された値（未入力のプレースホルダーは無視する）。"""
     out = {}
     for key in common.SETTINGS:
         v = os.environ.get(OPT_PREFIX + key.upper(), "").strip()
@@ -47,7 +47,7 @@ def configured() -> dict[str, str]:
 
 
 def child_env() -> dict[str, str]:
-    """Environment for the scripts: settings form values exported under the names common.get reads."""
+    """スクリプトに渡す環境変数。設定画面の値を common.get が読む名前で渡す。"""
     env = {k: v for k, v in os.environ.items() if not k.startswith(OPT_PREFIX)}
     for key, v in configured().items():
         names = common.SETTINGS[key][0]
@@ -59,7 +59,7 @@ def child_env() -> dict[str, str]:
 
 def scrub(text: str) -> str:
     for key, v in configured().items():
-        if common.SETTINGS[key][1] and len(v) >= 8:  # secrets only
+        if common.SETTINGS[key][1] and len(v) >= 8:  # 秘密値だけ
             text = text.replace(v, "***")
     fn = getattr(common, "scrub", None)
     return fn(text) if callable(fn) else text
@@ -75,19 +75,19 @@ def workspace() -> Path:
 def project(slug: str) -> Path:
     check = getattr(common, "check_id", None)
     if callable(check):
-        check(slug, "slug")
+        check(slug, "スラッグ")
     elif not slug or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for c in slug):
-        raise ValueError("slug must match ^[A-Za-z0-9_-]{1,64}$")
+        raise ValueError("スラッグは ^[A-Za-z0-9_-]{1,64}$ に合う形にする")
     return workspace() / slug
 
 
-# ---------------------------------------------------------------- running scripts
+# ---------------------------------------------------------------- スクリプトの実行
 def run_script(script: str, args: list[str], timeout: int = 900) -> str:
     cmd = [sys.executable, str(SCRIPTS / script), *args]
     r = subprocess.run(cmd, capture_output=True, text=True, env=child_env(), cwd=str(workspace()), timeout=timeout)
     out = (r.stdout or "") + (("\n" + r.stderr) if r.stderr.strip() else "")
     out = scrub(out.strip())[-12000:]
-    return (out or "(no output)") + ("" if r.returncode == 0 else f"\n[exit {r.returncode}]")
+    return (out or "(出力なし)") + ("" if r.returncode == 0 else f"\n[終了コード {r.returncode}]")
 
 
 def jobs_dir() -> Path:
@@ -105,7 +105,7 @@ def start_job(script: str, args: list[str], label: str) -> str:
                              env=child_env(), cwd=str(workspace()), start_new_session=True)
     meta.write_text(json.dumps({"id": jid, "pid": p.pid, "label": label, "script": script, "args": args,
                                 "started": time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False))
-    return f"started job {jid} ({label}). Check progress with studio_job(job_id=\"{jid}\")."
+    return f"ジョブ {jid}（{label}）を開始した。進み具合は studio_job(job_id=\"{jid}\") で確認する。"
 
 
 def job_status(job_id: str = "") -> str:
@@ -114,16 +114,16 @@ def job_status(job_id: str = "") -> str:
         rows = []
         for m in sorted(d.glob("*.json"))[-15:]:
             j = json.loads(m.read_text())
-            rows.append(f"{j['id']}  {'running' if alive(j['pid']) else 'finished'}  {j['label']}")
-        return "\n".join(rows) or "no jobs"
+            rows.append(f"{j['id']}  {'実行中' if alive(j['pid']) else '終了'}  {j['label']}")
+        return "\n".join(rows) or "ジョブは無い"
     if any(c not in "0123456789abcdef-" for c in job_id):
-        raise ValueError("bad job id")
+        raise ValueError("ジョブ ID が不正")
     meta, log = d / f"{job_id}.json", d / f"{job_id}.log"
     if not meta.exists():
-        return f"unknown job {job_id}"
+        return f"不明なジョブ {job_id}"
     j = json.loads(meta.read_text())
     tail = log.read_text(errors="replace")[-6000:] if log.exists() else ""
-    return f"{j['label']}: {'running' if alive(j['pid']) else 'finished'}\n{scrub(tail)}"
+    return f"{j['label']}: {'実行中' if alive(j['pid']) else '終了'}\n{scrub(tail)}"
 
 
 def alive(pid: int) -> bool:
@@ -131,34 +131,34 @@ def alive(pid: int) -> bool:
         os.kill(pid, 0)
     except (OSError, ProcessLookupError):
         return False
-    try:  # reap if it is our finished child
+    try:  # 終わった自分の子プロセスなら回収する
         done, _ = os.waitpid(pid, os.WNOHANG)
         return done == 0
     except ChildProcessError:
         return True
 
 
-# ---------------------------------------------------------------- tools
+# ---------------------------------------------------------------- ツール
 def t_status(_):
     cfg = configured()
-    lines = [f"workspace: {workspace()}", "settings:"]
+    lines = [f"ワークスペース: {workspace()}", "設定:"]
     for key, (_, secret, desc) in common.SETTINGS.items():
         v = cfg.get(key) or common.get(key)
-        lines.append(f"- {key}: {('set' if v else '(empty)') if secret else (v or '(empty)')}  — {desc}")
-    lines.append("tools on this computer:")
+        lines.append(f"- {key}: {('設定済み' if v else '(未設定)') if secret else (v or '(未設定)')}  — {desc}")
+    lines.append("このパソコンのツール:")
     for tool in ("ffmpeg", "ffprobe", "npx", "aws"):
-        lines.append(f"- {tool}: {'ok' if shutil.which(tool) else 'missing'}")
+        lines.append(f"- {tool}: {'あり' if shutil.which(tool) else '無い'}")
     return "\n".join(lines)
 
 
 def t_save_settings(_):
     cfg = configured()
     if not cfg:
-        return "Nothing to save: no values were entered in the settings form."
+        return "保存するものが無い: 設定画面に値が入力されていない。"
     data = common.load_file()
     data.update(cfg)
     common.save_file(data)
-    return f"Saved {len(cfg)} setting(s) to {common.CONFIG_FILE} (owner-only): {', '.join(sorted(cfg))}"
+    return f"{len(cfg)} 件の設定を {common.CONFIG_FILE}（本人だけが読める）に保存した: {', '.join(sorted(cfg))}"
 
 
 def t_paths(_):
@@ -177,14 +177,14 @@ def t_new_project(a):
 def t_list_projects(_):
     ws = workspace()
     if not ws.exists():
-        return f"workspace {ws} does not exist yet"
+        return f"ワークスペース {ws} はまだ無い"
     rows = []
     for p in sorted(ws.iterdir()):
         if (p / "shots.json").exists():
             finals = sorted((p / "final").glob("*.mp4")) if (p / "final").exists() else []
             rows.append(f"{p.name}  clips={len(list((p / 'clips').glob('*.mp4'))) if (p / 'clips').exists() else 0}"
-                        f"  final={'yes' if finals else 'no'}")
-    return "\n".join(rows) or "no projects"
+                        f"  final={'あり' if finals else 'なし'}")
+    return "\n".join(rows) or "プロジェクトは無い"
 
 
 def t_read_shots(a):
@@ -194,22 +194,22 @@ def t_read_shots(a):
 def t_write_shots(a):
     data = a["shots"] if isinstance(a["shots"], dict) else json.loads(a["shots"])
     if not isinstance(data.get("cuts"), list):
-        raise ValueError("shots must contain a 'cuts' list")
+        raise ValueError("shots には 'cuts' のリストが必要")
     p = project(a["slug"]) / "shots.json"
     tmp = p.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1))
     tmp.replace(p)
-    return f"saved {p} ({len(data['cuts'])} cuts)"
+    return f"保存した: {p}（{len(data['cuts'])} カット）"
 
 
 def t_write_text(a):
     allowed = {"brief.md", "voice/script.txt", "voice/yomi.json", "post.txt"}
     if a["file"] not in allowed:
-        raise ValueError(f"file must be one of {sorted(allowed)}")
+        raise ValueError(f"file は {sorted(allowed)} のどれかにする")
     p = project(a["slug"]) / a["file"]
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(a["text"])
-    return f"saved {p}"
+    return f"保存した: {p}"
 
 
 def t_gen_image(a):
@@ -296,14 +296,14 @@ def t_post(a):
         return run_script("threads_post.py", args)
     if cmd == "approve":
         if not a.get("by") or not a.get("note"):
-            raise ValueError("approve needs 'by' and 'note' (the person's own words of approval)")
+            raise ValueError("approve には 'by' と 'note'（本人が書いた承認の言葉）が必要")
         return run_script("threads_post.py", [*ws, "approve", a["slug"], "--by", a["by"], "--note", a["note"]])
     if cmd == "schedule":
         return run_script("threads_post.py", [*ws, "schedule", a["slug"], "--at", a["at"]])
     if cmd == "publish_due":
         args = [*ws, "publish-due"] + (["--dry-run"] if a.get("dry_run") else []) + ["--max", str(int(a.get("max", 1)))]
         return run_script("threads_post.py", args) if a.get("dry_run") else start_job("threads_post.py", args, "publish-due")
-    raise ValueError("action must be one of status, draft, approve, schedule, publish_due")
+    raise ValueError("action は status・draft・approve・schedule・publish_due のどれかにする")
 
 
 def t_insights(a):
@@ -317,7 +317,7 @@ def t_job(a):
 S = {"type": "string"}
 B = {"type": "boolean"}
 N = {"type": "integer"}
-SLUG = {"type": "string", "description": "project folder name under the workspace, e.g. t004-camp"}
+SLUG = {"type": "string", "description": "ワークスペース内のプロジェクトのフォルダ名。例 t004-camp"}
 
 
 def tool(name, desc, props=None, required=None, fn=None):
@@ -326,24 +326,24 @@ def tool(name, desc, props=None, required=None, fn=None):
 
 
 TOOLS = dict((t["name"], (t, f)) for t, f in [
-    tool("studio_status", "Show which settings are entered (secrets shown only as set/empty), the workspace, and whether ffmpeg/npx/aws are installed.", fn=t_status),
-    tool("studio_save_settings", "Copy the settings form values into the owner-only local config file so shell scripts can use them too. Returns only key names.", fn=t_save_settings),
-    tool("studio_paths", "Return plugin, scripts, workspace and config file paths on this computer.", fn=t_paths),
-    tool("studio_new_project", "Create a video project folder with brief.md and shots.json.", {"slug": SLUG, "type": {"type": "string", "enum": ["story", "intro"]}, "cuts": N}, ["slug"], t_new_project),
-    tool("studio_list_projects", "List projects in the workspace with clip and final-video status.", fn=t_list_projects),
-    tool("studio_read_shots", "Read a project's shots.json (cuts, prompts, timing).", {"slug": SLUG}, ["slug"], t_read_shots),
-    tool("studio_write_shots", "Replace a project's shots.json. Pass the whole object.", {"slug": SLUG, "shots": {"type": "object"}}, ["slug", "shots"], t_write_shots),
-    tool("studio_write_text", "Write brief.md, voice/script.txt (one narration line per cut), voice/yomi.json or post.txt in a project.", {"slug": SLUG, "file": {"type": "string", "enum": ["brief.md", "voice/script.txt", "voice/yomi.json", "post.txt"]}, "text": S}, ["slug", "file", "text"], t_write_text),
-    tool("studio_gen_image", "PAID. Generate or edit an image (storyboard, character sheet, start frame). Paths are relative to the project. Use dry_run for the price.", {"slug": SLUG, "prompt": S, "out": S, "model": {"type": "string", "enum": ["seedream45", "nano-banana-pro"]}, "images": {"type": "array", "items": S}, "size": S, "dry_run": B, "force": B}, ["slug", "prompt", "out"], t_gen_image),
-    tool("studio_gen_video", "PAID. Generate video cuts from start frames (background job; resumable). Use dry_run (+with_draft) for the estimate before approval.", {"slug": SLUG, "cut": S, "all": B, "draft": B, "variants": N, "model": S, "dry_run": B, "with_draft": B, "force": B}, ["slug"], t_gen_video),
-    tool("studio_yomi_check", "Check narration readings before generating; suggest=true appends suggestions to voice/yomi.json.", {"slug": SLUG, "suggest": B}, ["slug"], t_yomi),
-    tool("studio_gen_voice", "PAID (small). Generate the whole narration in one pass with timestamps and write cut timing into shots.json. retime=true recomputes timing for free.", {"slug": SLUG, "voice_id": S, "tag": S, "dry_run": B, "retime": B, "force": B}, ["slug"], t_gen_voice),
-    tool("studio_gen_bgm", "PAID. Generate instrumental BGM candidates.", {"slug": SLUG, "prompt": S, "seconds": N, "provider": {"type": "string", "enum": ["elevenlabs", "fal"]}, "count": N, "dry_run": B}, ["slug", "prompt"], t_gen_bgm),
-    tool("studio_qa", "Make QA contact sheets and detect frozen frames / harsh seams for a cut, all cuts, or the final video.", {"slug": SLUG, "cut": S, "final": B}, ["slug"], t_qa),
-    tool("studio_assemble", "Assemble captions, BGM and CTA and render final/<slug>-final.mp4 and -post.mp4 (background job).", {"slug": SLUG, "render": B}, ["slug"], t_assemble),
-    tool("studio_post", "Threads posting queue. action=status|draft|approve|schedule|publish_due. 'approve' ONLY after the person explicitly said OK in chat; pass their words as note. Posting cannot be undone.", {"action": {"type": "string", "enum": ["status", "draft", "approve", "schedule", "publish_due"]}, "slug": SLUG, "topic": S, "at": S, "hook": S, "format": S, "by": S, "note": S, "dry_run": B, "max": N}, ["action"], t_post),
-    tool("studio_insights", "Pull Threads metrics (pull) or write the 48h/7d review (review).", {"action": {"type": "string", "enum": ["pull", "review"]}}, [], t_insights),
-    tool("studio_job", "Show a background job's progress and log tail, or list recent jobs when job_id is empty.", {"job_id": S}, [], t_job),
+    tool("studio_status", "どの設定が入力済みか（秘密値は設定済みかどうかだけ）、ワークスペース、ffmpeg・npx・aws が入っているかを表示する。", fn=t_status),
+    tool("studio_save_settings", "設定画面の値を、本人だけが読めるローカルの設定ファイルにコピーする（シェルのスクリプトからも使えるようにするため）。返すのはキーの名前だけ。", fn=t_save_settings),
+    tool("studio_paths", "このパソコン上のプラグイン・スクリプト・ワークスペース・設定ファイルのパスを返す。", fn=t_paths),
+    tool("studio_new_project", "brief.md と shots.json を入れた動画プロジェクトのフォルダを作る。", {"slug": SLUG, "type": {"type": "string", "enum": ["story", "intro"]}, "cuts": N}, ["slug"], t_new_project),
+    tool("studio_list_projects", "ワークスペースのプロジェクトを、クリップ数と完成動画の有無付きで一覧にする。", fn=t_list_projects),
+    tool("studio_read_shots", "プロジェクトの shots.json（カット・プロンプト・タイミング）を読む。", {"slug": SLUG}, ["slug"], t_read_shots),
+    tool("studio_write_shots", "プロジェクトの shots.json を置き換える。オブジェクト全体を渡す。", {"slug": SLUG, "shots": {"type": "object"}}, ["slug", "shots"], t_write_shots),
+    tool("studio_write_text", "プロジェクトの brief.md・voice/script.txt（1カット1行のナレーション）・voice/yomi.json・post.txt を書く。", {"slug": SLUG, "file": {"type": "string", "enum": ["brief.md", "voice/script.txt", "voice/yomi.json", "post.txt"]}, "text": S}, ["slug", "file", "text"], t_write_text),
+    tool("studio_gen_image", "有料。画像を生成・編集する（絵コンテ・キャラクターシート・開始フレーム）。パスはプロジェクト基準。料金は dry_run で確かめる。", {"slug": SLUG, "prompt": S, "out": S, "model": {"type": "string", "enum": ["seedream45", "nano-banana-pro"]}, "images": {"type": "array", "items": S}, "size": S, "dry_run": B, "force": B}, ["slug", "prompt", "out"], t_gen_image),
+    tool("studio_gen_video", "有料。開始フレームから動画のカットを生成する（バックグラウンドのジョブ。途中から再開できる）。承認の前に dry_run（+with_draft）で見積もる。", {"slug": SLUG, "cut": S, "all": B, "draft": B, "variants": N, "model": S, "dry_run": B, "with_draft": B, "force": B}, ["slug"], t_gen_video),
+    tool("studio_yomi_check", "生成の前にナレーションの読みを確かめる。suggest=true で voice/yomi.json に読みの候補を追記する。", {"slug": SLUG, "suggest": B}, ["slug"], t_yomi),
+    tool("studio_gen_voice", "有料（少額）。ナレーション全体をタイムスタンプ付きで1回で生成し、カットのタイミングを shots.json に書く。retime=true ならタイミングだけ無料で計算し直す。", {"slug": SLUG, "voice_id": S, "tag": S, "dry_run": B, "retime": B, "force": B}, ["slug"], t_gen_voice),
+    tool("studio_gen_bgm", "有料。歌なしの BGM の候補を生成する。", {"slug": SLUG, "prompt": S, "seconds": N, "provider": {"type": "string", "enum": ["elevenlabs", "fal"]}, "count": N, "dry_run": B}, ["slug", "prompt"], t_gen_bgm),
+    tool("studio_qa", "1カット・全カット・完成動画について、確認用のコンタクトシートを作り、止まったフレームや不自然なつなぎ目を見つける。", {"slug": SLUG, "cut": S, "final": B}, ["slug"], t_qa),
+    tool("studio_assemble", "字幕・BGM・CTA を組み立て、final/<slug>-final.mp4 と -post.mp4 を書き出す（バックグラウンドのジョブ）。", {"slug": SLUG, "render": B}, ["slug"], t_assemble),
+    tool("studio_post", "Threads の投稿キュー。action=status|draft|approve|schedule|publish_due。'approve' は本人がチャットで明示的に OK と言ったときだけ使い、その言葉を note に渡す。投稿は取り消せない。", {"action": {"type": "string", "enum": ["status", "draft", "approve", "schedule", "publish_due"]}, "slug": SLUG, "topic": S, "at": S, "hook": S, "format": S, "by": S, "note": S, "dry_run": B, "max": N}, ["action"], t_post),
+    tool("studio_insights", "Threads の数値を取得する（pull）か、48時間・7日の振り返りを書く（review）。", {"action": {"type": "string", "enum": ["pull", "review"]}}, [], t_insights),
+    tool("studio_job", "バックグラウンドのジョブの進み具合とログの末尾を表示する。job_id が空なら最近のジョブを一覧にする。", {"job_id": S}, [], t_job),
 ])
 
 
@@ -377,20 +377,20 @@ def main():
             p = req.get("params", {})
             entry = TOOLS.get(p.get("name"))
             if not entry:
-                reply(mid, error={"code": -32602, "message": f"unknown tool {p.get('name')}"})
+                reply(mid, error={"code": -32602, "message": f"不明なツール {p.get('name')}"})
                 continue
             try:
                 args = p.get("arguments") or {}
                 if "slug" in args:
-                    project(str(args["slug"]))  # reject anything but a plain folder name before doing work
+                    project(str(args["slug"]))  # 作業の前に、単純なフォルダ名以外を拒む
                 text = entry[1](args)
                 reply(mid, {"content": [{"type": "text", "text": text}]})
             except Exception as e:  # noqa: BLE001
-                reply(mid, {"content": [{"type": "text", "text": f"error: {scrub(str(e))}"}], "isError": True})
+                reply(mid, {"content": [{"type": "text", "text": f"エラー: {scrub(str(e))}"}], "isError": True})
         elif method == "ping":
             reply(mid, {})
         else:
-            reply(mid, error={"code": -32601, "message": f"method not found: {method}"})
+            reply(mid, error={"code": -32601, "message": f"メソッドが無い: {method}"})
 
 
 if __name__ == "__main__":

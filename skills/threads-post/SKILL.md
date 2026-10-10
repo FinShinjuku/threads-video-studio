@@ -1,6 +1,6 @@
 ---
 name: threads-post
-description: "完成動画を Threads に予約投稿し、反応を振り返る。本文・リンク・予約時刻・トピックの一式を人に承認してもらい、承認済みだけを予約時刻に自動公開（動画は非公開ストレージの期限付き URL で渡す）し、48時間・7日で伸びたかを判定して次の企画につなげる。Use when drafting a Threads post, getting approval, scheduling or publishing, checking whether a post went out, setting up the auto-posting schedule, or reviewing results (\"投稿して\" \"予約投稿\" \"Threads に出して\" \"公開された？\" \"振り返り\" \"post to Threads\")."
+description: "完成動画を Threads に予約投稿し、反応を振り返る。本文・リンク・予約時刻・トピックの一式を人に承認してもらい、承認済みだけを予約時刻に自動公開（動画は非公開ストレージの期限付き URL で渡す）し、48時間・7日で伸びたかを判定して次の企画につなげる。使う場面：Threads の投稿文を作る・承認をもらう・予約する・公開するとき、公開されたか確かめるとき、自動投稿の定期実行を設定するとき、反応を振り返るとき（「投稿して」「予約投稿」「Threads に出して」「公開された？」「振り返り」）。"
 ---
 
 # threads-post — 承認・予約・自動公開・振り返り

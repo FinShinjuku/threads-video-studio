@@ -1,6 +1,6 @@
-"""Threads Graph API client and small file helpers shared by threads_post.py and threads_insights.py.
+"""Threads Graph API のクライアントと、threads_post.py・threads_insights.py が共通で使うファイル操作。
 
-Standard library only. The access token is never printed: every error message is scrubbed.
+標準ライブラリのみ。アクセストークンは表示しない（エラーメッセージはすべて秘密値を消してから出す）。
 """
 
 from __future__ import annotations
@@ -27,11 +27,11 @@ REFRESH_URL = "https://graph.threads.net/refresh_access_token"
 
 
 # ---------------------------------------------------------------------------
-# time
+# 時刻
 # ---------------------------------------------------------------------------
 
 def now() -> dt.datetime:
-    """Current local time, timezone-aware."""
+    """今のローカル時刻（タイムゾーン付き）。"""
     return dt.datetime.now().astimezone()
 
 
@@ -40,7 +40,7 @@ def iso(t: dt.datetime) -> str:
 
 
 def parse_time(s: str) -> dt.datetime | None:
-    """Accept ISO 8601, 'YYYY-MM-DD HH:MM[:SS]' and Threads' '+0000' form. No timezone = local time."""
+    """ISO 8601、'YYYY-MM-DD HH:MM[:SS]'、Threads の '+0000' 形式を受け付ける。タイムゾーンが無ければローカル時刻とみなす。"""
     s = (s or "").strip().replace("/", "-")
     if not s:
         return None
@@ -57,11 +57,11 @@ def parse_time(s: str) -> dt.datetime | None:
 
 
 # ---------------------------------------------------------------------------
-# files
+# ファイル
 # ---------------------------------------------------------------------------
 
 def atomic_write_text(path: Path, text: str, mode: int = 0o644) -> None:
-    """Write via a temp file in the same folder, fsync, then rename (never leaves a half-written file)."""
+    """同じフォルダの一時ファイルに書いて fsync し、名前を変える（書きかけのファイルを残さない）。"""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".tmp.")
@@ -90,7 +90,7 @@ class LockHeld(RuntimeError):
 
 try:
     import fcntl as _fcntl
-except ImportError:  # Windows
+except ImportError:  # Windows の場合
     _fcntl = None
 
 STALE_LOCK_S = 3 * 3600
@@ -109,11 +109,11 @@ def _pid_alive(pid: int) -> bool:
 
 
 class FileLock:
-    """Exclusive, non-blocking lock on a lock file.
+    """ロックファイルによる排他ロック（待たずに失敗する）。
 
-    With fcntl (macOS/Linux): flock, released automatically if the process dies.
-    Without fcntl (Windows): the lock file is created with O_CREAT|O_EXCL and holds "<pid> <epoch>";
-    a lock whose process is gone, or which is older than STALE_LOCK_S, is treated as stale and removed.
+    fcntl がある場合（macOS/Linux）: flock を使う。プロセスが死ねば自動で外れる。
+    fcntl が無い場合（Windows）: O_CREAT|O_EXCL でロックファイルを作り、"<pid> <epoch>" を書く。
+    持ち主のプロセスが居ないか、STALE_LOCK_S より古いロックは放置されたものとみなして消す。
     """
 
     def __init__(self, path: Path, use_fcntl: bool | None = None):
@@ -136,12 +136,12 @@ class FileLock:
                 except (OSError, ValueError):
                     pid, ts = 0, 0.0
                 if _pid_alive(pid) and time.time() - ts < STALE_LOCK_S:
-                    raise LockHeld(f"another run (pid {pid}) holds {self.path.name}; try again later") from None
+                    raise LockHeld(f"別の実行（pid {pid}）が {self.path.name} を使っている。あとで再実行してください") from None
                 try:
-                    self.path.unlink()  # stale lock
+                    self.path.unlink()  # 放置されたロック
                 except FileNotFoundError:
                     pass
-        raise LockHeld(f"could not take {self.path.name}; try again later")
+        raise LockHeld(f"{self.path.name} のロックを取れなかった。あとで再実行してください")
 
     def __enter__(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -155,7 +155,7 @@ class FileLock:
             os.close(self.fd)
             self.fd = None
             if e.errno in (errno.EAGAIN, errno.EACCES, errno.EWOULDBLOCK):
-                raise LockHeld(f"another run holds {self.path.name}; try again later") from None
+                raise LockHeld(f"別の実行が {self.path.name} を使っている。あとで再実行してください") from None
             raise
         os.ftruncate(self.fd, 0)
         os.write(self.fd, f"{os.getpid()} {int(time.time())}".encode())
@@ -177,14 +177,14 @@ class FileLock:
 
 
 # ---------------------------------------------------------------------------
-# paths
+# パス
 # ---------------------------------------------------------------------------
 
 _SLUG_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
-def check_slug(slug, what: str = "slug") -> str:
-    """Slugs / cut ids become file names: letters, digits, '_' and '-' only (same rule as common.check_id)."""
+def check_slug(slug, what: str = "スラッグ") -> str:
+    """スラッグとカット ID はファイル名になるので、英数字・'_'・'-' のみ（common.check_id と同じ規則）。"""
     fn = getattr(common, "check_id", None)
     s = slug if isinstance(slug, str) else str(slug)
     if fn:
@@ -193,12 +193,12 @@ def check_slug(slug, what: str = "slug") -> str:
         except ValueError as e:
             raise RuntimeError(str(e)) from None
     if not _SLUG_RE.match(s):
-        raise RuntimeError(f"invalid {what} {s[:40]!r} (letters, digits, _ - only)")
+        raise RuntimeError(f"{what} {s[:40]!r} が不正（英数字・_・- のみ）")
     return s
 
 
 def safe_path(base: Path, rel) -> Path:
-    """Resolve `rel` under `base` and refuse anything that ends up outside it (.., absolute, symlinks)."""
+    """`rel` を `base` の中で解決し、外に出るもの（..・絶対パス・シンボリックリンク）は拒む。"""
     base_r = Path(base).resolve()
     fn = getattr(common, "safe_path", None)
     p = None
@@ -213,7 +213,7 @@ def safe_path(base: Path, rel) -> Path:
         q = Path(os.path.expanduser(str(rel)))
         p = (q if q.is_absolute() else base_r / q).resolve()
     if p != base_r and base_r not in p.parents:
-        raise RuntimeError(f"path {str(rel)[:80]!r} is outside the project folder")
+        raise RuntimeError(f"パス {str(rel)[:80]!r} がプロジェクトフォルダの外にある")
     return p
 
 
@@ -230,12 +230,12 @@ _REDACT = [
 
 
 def redact(msg, secret: str | None = None) -> str:
-    """Remove secrets before anything is printed or saved: configured secret values, the given secret,
-    Bearer values, access_token=, X-Amz-* signature parts, and every URL query string."""
+    """表示・保存の前に秘密を消す: 設定済みの秘密値、渡された secret、Bearer の値、access_token=、
+    X-Amz-* の署名部分、すべての URL のクエリ文字列。"""
     msg = str(msg)
     try:
         msg = common.scrub(msg)
-    except Exception:  # noqa: BLE001 - scrubbing must never fail
+    except Exception:  # noqa: BLE001 - 秘密値の消し込みで失敗してはいけない
         pass
     if secret:
         msg = msg.replace(secret, "***")
@@ -244,16 +244,16 @@ def redact(msg, secret: str | None = None) -> str:
     return msg
 
 
-scrub = redact  # backwards-compatible name
+scrub = redact  # 互換のための別名
 
 _ID_RE = re.compile(r"^[0-9]{1,40}$")
 
 
 def check_id(v) -> str:
-    """Threads object ids are numeric. Anything else is refused before it reaches a URL."""
+    """Threads のオブジェクト ID は数字のみ。それ以外は URL に入る前に拒む。"""
     v = str(v).strip()
     if not _ID_RE.match(v):
-        raise RuntimeError(f"invalid Threads id {v[:40]!r} (digits only)")
+        raise RuntimeError(f"Threads の ID {v[:40]!r} が不正（数字のみ）")
     return v
 
 
@@ -261,10 +261,10 @@ _PATH_RE = re.compile(r"^(me|[0-9]{1,40})(/[a-z_]{1,40})?$")
 
 
 def check_path(path: str) -> str:
-    """Only relative Graph paths like `me`, `<id>`, `<id>/threads`, `<id>/insights` are allowed."""
+    """`me`・`<id>`・`<id>/threads`・`<id>/insights` のような相対の Graph パスだけを許す。"""
     p = str(path).strip().lstrip("/")
     if not _PATH_RE.match(p):
-        raise RuntimeError(f"refused Graph path {redact(p)[:60]!r} (relative '<id>[/edge]' only)")
+        raise RuntimeError(f"Graph パス {redact(p)[:60]!r} を拒否（相対の '<id>[/edge]' のみ可）")
     return p
 
 
@@ -274,8 +274,8 @@ def is_graph_url(url: str) -> bool:
 
 
 class Graph:
-    """Minimal Threads Graph API client. The token goes in an Authorization header, never in the URL.
-    Only relative paths are accepted; paging URLs are followed only on https://graph.threads.net."""
+    """最小限の Threads Graph API クライアント。トークンは Authorization ヘッダーに入れ、URL には入れない。
+    受け付けるのは相対パスのみ。ページ送りの URL は https://graph.threads.net のものだけたどる。"""
 
     def __init__(self, token: str, opener=urllib.request.urlopen, base: str = GRAPH):
         self.token = token
@@ -293,7 +293,7 @@ class Graph:
             raise RuntimeError(redact(f"Threads API {where}: HTTP {e.code} {e.read().decode(errors='replace')[:400]}",
                                       self.token)) from None
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
-            raise RuntimeError(redact(f"Threads API {where}: network error {e}", self.token)) from None
+            raise RuntimeError(redact(f"Threads API {where}: ネットワークエラー {e}", self.token)) from None
 
     def _call(self, method: str, path: str, params: dict | None = None) -> dict:
         p = check_path(path)
@@ -322,24 +322,24 @@ class Graph:
             if not nxt:
                 return
             if not is_graph_url(nxt):
-                raise RuntimeError("refused paging URL outside https://graph.threads.net")
+                raise RuntimeError("https://graph.threads.net 以外のページ送り URL を拒否")
             res = self._send("GET", nxt, None, "GET paging")
 
 
 def user_id(g, configured: str = "") -> str:
-    """Configured threads_user_id, else look it up from the token."""
+    """設定の threads_user_id を使う。無ければトークンから調べる。"""
     if configured:
         return check_id(configured)
     me = g.get("me", fields="id,username")
     uid = str(me.get("id", "")).strip()
     if not uid:
-        raise RuntimeError("could not resolve the Threads user id from the token (/me returned no id)")
+        raise RuntimeError("トークンから Threads のユーザー ID を調べられなかった（/me が id を返さない）")
     return check_id(uid)
 
 
 def refresh_long_lived(token: str, opener=urllib.request.urlopen) -> dict:
-    """Extend a long-lived token. Returns {"access_token", "expires_in"} (never print it).
-    Tries the Authorization header first; falls back to the documented query parameter."""
+    """長期トークンを延長する。{"access_token", "expires_in"} を返す（表示しないこと）。
+    まず Authorization ヘッダーで試し、だめなら公式ドキュメントにあるクエリパラメータで送る。"""
     def attempt(url: str, headers: dict) -> dict:
         with opener(urllib.request.Request(url, method="GET", headers=headers), timeout=30) as r:
             return json.loads(r.read())
@@ -352,10 +352,10 @@ def refresh_long_lived(token: str, opener=urllib.request.urlopen) -> dict:
                 raise
             res = attempt(base + "&" + urllib.parse.urlencode({"access_token": token}), {})
     except urllib.error.HTTPError as e:
-        raise RuntimeError(redact(f"token refresh failed: HTTP {e.code} {e.read().decode(errors='replace')[:300]}",
+        raise RuntimeError(redact(f"トークンの延長に失敗: HTTP {e.code} {e.read().decode(errors='replace')[:300]}",
                                   token)) from None
     except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
-        raise RuntimeError(redact(f"token refresh failed: network error {e}", token)) from None
+        raise RuntimeError(redact(f"トークンの延長に失敗: ネットワークエラー {e}", token)) from None
     if not res.get("access_token"):
-        raise RuntimeError("token refresh: no access_token in the response")
+        raise RuntimeError("トークンの延長: 応答に access_token が無い")
     return {"access_token": res["access_token"], "expires_in": int(res.get("expires_in") or 0)}

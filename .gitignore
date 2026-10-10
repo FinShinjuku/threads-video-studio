@@ -1,14 +1,14 @@
-# secrets — never commit
+# 秘密値（絶対にコミットしない）
 config.json
 tvs-config.json
 *.task
 *.task.locked
 .env
-# python / os
+# Python・OS が作るファイル
 __pycache__/
 *.pyc
 .DS_Store
-# generated media
+# 生成した動画・音声
 *.mp4
 *.mp3
 *.wav

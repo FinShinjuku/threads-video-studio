@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""Pre-generation reading check for the narration script (no API calls).
+"""ナレーション原稿を生成前に読みの確認をする（API は呼ばない）。
 
-  python3 yomi_check.py --project t004-camp            # report
-  python3 yomi_check.py --project t004-camp --suggest  # also append suggested readings to voice/yomi.json
+  python3 yomi_check.py --project t004-camp            # 確認結果を出す
+  python3 yomi_check.py --project t004-camp --suggest  # 読みの候補を voice/yomi.json にも追記する
 
-Input: voice/script.txt (one narration line per cut; blank lines ignored). If it is missing or empty,
-the `line` fields of shots.json are used.
-voice/yomi.json is a flat map {"written form": "reading"}. It changes only what is SPOKEN; captions keep
-the original text.
+入力: voice/script.txt（1カットにナレーション1行。空行は無視）。無いか空なら shots.json の `line` を使う。
+voice/yomi.json は {"表記": "読み"} の平たい対応表。変わるのは読み上げだけで、字幕は元の文のまま。
 
-With `pyopenjtalk` installed (optional), each line's reading is shown in katakana. Without it, the script
-lists what a machine can find: Latin letters, numbers, symbols and kanji that are often misread.
+`pyopenjtalk`（任意）が入っていれば、各行の読みをカタカナで表示する。無ければ、機械で見つけられるもの
+（英字・数字・記号・読み間違えやすい漢字）を一覧にする。
 """
 
 from __future__ import annotations
@@ -21,7 +19,7 @@ from pathlib import Path
 
 import common
 
-# Kanji / words with several common readings. Value = typical readings (for the human to decide).
+# よく使う読みが複数ある漢字・語。値 = 主な読み（どれにするかは人が決める）。
 RISKY = {
     "上手": "じょうず / うわて / かみて",
     "一日": "いちにち / ついたち",
@@ -73,19 +71,19 @@ def read_script_lines(project: Path) -> list[str]:
         shots = common.load_shots(project)
         lines = [(c.get("line") or "").strip() for c in shots.get("cuts", [])]
         if not all(lines):
-            raise RuntimeError("voice/script.txt is empty and some cuts in shots.json have no 'line'")
+            raise RuntimeError("voice/script.txt が空で、shots.json に 'line' の無いカットがある")
     return lines
 
 
 def load_yomi(project: Path) -> dict:
     data = common.load_json(common.safe_path(project, "voice/yomi.json"), default={})
     if not isinstance(data, dict):
-        raise ValueError("voice/yomi.json must be a flat object {\"written\": \"reading\"}")
+        raise ValueError("voice/yomi.json は {\"表記\": \"読み\"} の平たいオブジェクトにする")
     return {str(k): str(v) for k, v in data.items() if str(k) and str(v)}
 
 
 def apply_yomi(text: str, yomi: dict) -> str:
-    """Replace written forms with readings, longest key first, in one pass (no re-replacement)."""
+    """表記を読みに置き換える。長いキーから順に、1回で置き換える（置き換えた後をさらに置き換えない）。"""
     if not yomi:
         return text
     keys = sorted(yomi, key=len, reverse=True)
@@ -99,7 +97,7 @@ def _zen2han(s: str) -> str:
 
 
 def number_kana(n: int) -> str:
-    """Integer (0 <= n < 10^12) to hiragana, e.g. 40 -> よんじゅう, 300 -> さんびゃく."""
+    """整数（0 <= n < 10^12）をひらがなにする。例: 40 -> よんじゅう、300 -> さんびゃく。"""
     if n == 0:
         return "ぜろ"
     special = {"百": {3: "さんびゃく", 6: "ろっぴゃく", 8: "はっぴゃく"},
@@ -142,13 +140,13 @@ def suggest_reading(token: str, g2p=None) -> str | None:
             pass
     if re.fullmatch(r"[0-9][0-9,]*", t):
         return number_kana(int(t.replace(",", "")))
-    if re.fullmatch(r"[A-Z]{1,3}", t):  # short acronyms only; LINE, NASA etc. are words
+    if re.fullmatch(r"[A-Z]{1,3}", t):  # 短い略語だけ。LINE や NASA などは単語として読む
         return "".join(LETTERS[c] for c in t)
     return None
 
 
 def scan_line(text: str) -> list[tuple[str, str]]:
-    """Items a machine can flag without a dictionary: (kind, token)."""
+    """辞書なしで機械が指摘できる項目: (種類, 文字列)。"""
     found: list[tuple[str, str]] = []
     seen = set()
 
@@ -174,17 +172,17 @@ def scan_line(text: str) -> list[tuple[str, str]]:
 
 def get_g2p():
     try:
-        import pyopenjtalk  # optional dependency
+        import pyopenjtalk  # 任意の依存パッケージ
         return pyopenjtalk.g2p
     except Exception:
         return None
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Check how the narration script will be read (before paying for TTS).")
-    ap.add_argument("--project", help="project folder or slug (default: current folder)")
+    ap = argparse.ArgumentParser(description="ナレーション原稿がどう読まれるかを確認する（有料の音声合成の前に）。")
+    ap.add_argument("--project", help="プロジェクトのフォルダまたはスラッグ（省略時は今のフォルダ）")
     ap.add_argument("--suggest", action="store_true",
-                    help="append machine suggestions (numbers, acronyms, pyopenjtalk readings) to voice/yomi.json")
+                    help="機械による読みの候補（数字・略語・pyopenjtalk の読み）を voice/yomi.json に追記する")
     a = ap.parse_args()
 
     project = common.project_dir(a.project)
@@ -192,26 +190,26 @@ def main() -> None:
     yomi = load_yomi(project)
     g2p = get_g2p()
     if g2p is None:
-        print("warning: pyopenjtalk not installed - showing machine-detectable risks only "
-              "(pip install pyopenjtalk for full readings)")
+        print("警告: pyopenjtalk が入っていないので、機械で見つけられる注意点だけを表示する"
+              "（全文の読みを見るには pip install pyopenjtalk）")
 
     suggestions: dict[str, str] = {}
     for i, line in enumerate(lines, 1):
         spoken = apply_yomi(line, yomi)
         print(f"\n[{i:02d}] {line}")
         if spoken != line:
-            print(f"     spoken: {spoken}")
+            print(f"     読み上げ: {spoken}")
         if g2p is not None:
             try:
-                print(f"     reading: {g2p(spoken, kana=True)}")
+                print(f"     読み: {g2p(spoken, kana=True)}")
             except Exception as e:
-                print(f"     reading: (pyopenjtalk failed: {e})")
+                print(f"     読み: （pyopenjtalk が失敗した: {e}）")
         for kind, tok in scan_line(spoken):
             if kind == "kanji":
-                print(f"     check {kind}: {tok}  ({RISKY[tok]})")
+                print(f"     確認 {kind}: {tok}  （{RISKY[tok]}）")
                 continue
             sug = suggest_reading(tok, g2p) if kind != "symbol" else None
-            print(f"     check {kind}: {tok}" + (f"  -> suggest {sug}" if sug else ""))
+            print(f"     確認 {kind}: {tok}" + (f"  -> 候補 {sug}" if sug else ""))
             if sug and tok not in yomi:
                 suggestions[tok] = sug
 
@@ -221,13 +219,13 @@ def main() -> None:
             added = {k: v for k, v in suggestions.items() if k not in merged}
             merged.update(added)
             common.save_json(common.safe_path(project, "voice/yomi.json"), merged)
-            print(f"\nadded {len(added)} suggestion(s) to voice/yomi.json - review them before generating:")
+            print(f"\nvoice/yomi.json に候補を {len(added)} 件追加した。生成の前に見直す:")
             for k, v in added.items():
                 print(f"  {k} -> {v}")
         else:
-            print("\nno machine suggestions to add")
+            print("\n追加する候補は無い")
     elif suggestions:
-        print(f"\n{len(suggestions)} suggestion(s) available; re-run with --suggest to add them to voice/yomi.json")
+        print(f"\n候補が {len(suggestions)} 件ある。--suggest を付けて再実行すると voice/yomi.json に追加する")
 
 
 if __name__ == "__main__":

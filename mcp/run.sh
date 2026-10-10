@@ -1,5 +1,5 @@
 #!/bin/sh
-# Start the studio MCP server with a Python >= 3.10 (macOS ships 3.9 at /usr/bin/python3).
+# Python 3.10 以上で studio の MCP サーバーを起動する（macOS の /usr/bin/python3 は 3.9）。
 PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:/usr/bin:/bin:$PATH"
 export PATH
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -8,5 +8,5 @@ for py in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
     exec "$py" "$DIR/studio_server.py"
   fi
 done
-echo "threads-video-studio: Python 3.10 or newer is required (install with: brew install python)" >&2
+echo "threads-video-studio: Python 3.10 以上が必要（brew install python で入れられる）" >&2
 exit 1

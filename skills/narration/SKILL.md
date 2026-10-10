@@ -1,6 +1,6 @@
 ---
 name: narration
-description: "日本語ナレーションを ElevenLabs v3 で作る。生成前に読み間違いを機械で洗い出して読み替え辞書に入れ、原稿全体を1回で通して生成して声色をそろえ、文字ごとの時刻からカットの尺を決める。Use when writing or generating Japanese narration, checking readings/mispronunciations, choosing a voice, or timing cuts to the voice (\"ナレーション\" \"ナレ\" \"読み上げ\" \"読み間違い\" \"声\" \"narration\" \"voice-over\")."
+description: "日本語ナレーションを ElevenLabs v3 で作る。生成前に読み間違いを機械で洗い出して読み替え辞書に入れ、原稿全体を1回で通して生成して声色をそろえ、文字ごとの時刻からカットの尺を決める。使う場面：日本語ナレーションを書く・作るとき、読み間違いを確かめるとき、声を選ぶとき、声に合わせてカットの尺を決めるとき（「ナレーション」「ナレ」「読み上げ」「読み間違い」「声」）。"
 ---
 
 # narration — 読みの確認・通し生成・尺の確定

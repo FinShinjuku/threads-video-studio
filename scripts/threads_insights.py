@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Pull Threads post metrics and write 48h / 7d learnings.
+"""Threads の投稿の数値を取得し、48時間後・7日後の振り返りを書く。
 
-  pull    For every published post in <workspace>/posts.json, fetch insights
-          (views, likes, replies, reposts, quotes, shares) and append a dated snapshot row to
-          <workspace>/metrics.csv.
-  review  For each published post, once a snapshot exists at or after 48 hours / 7 days from publishing,
-          add one row per (slug, checkpoint) to <workspace>/learnings.csv (insert-only, never overwritten)
-          and write a summary to <workspace>/reports/YYYY-MM-DD.md.
+  pull    <workspace>/posts.json の公開済みの投稿それぞれについて、インサイト
+          （views・likes・replies・reposts・quotes・shares）を取得し、日付付きの記録を
+          <workspace>/metrics.csv に1行ずつ追記する。
+  review  公開済みの投稿ごとに、公開から48時間・7日以降の記録があれば、(slug, checkpoint) ごとに1行を
+          <workspace>/learnings.csv に足し（追記のみ。上書きしない）、まとめを
+          <workspace>/reports/YYYY-MM-DD.md に書く。
 
-Verdict (deterministic): ratio of this post's views to the median views of EARLIER posts at the same checkpoint.
-  ratio >= 1.5 -> 伸びた / ratio <= 0.67 -> 伸びなかった / otherwise -> 普通 / fewer than 3 earlier posts -> 比較対象不足
-`insight` and `next_action` are left empty for a human (or Claude in chat) to fill in.
+判定（決まった計算で出す）: この投稿の views を、同じ時点での「それより前の投稿」の views の中央値で割った比。
+  比 >= 1.5 -> 伸びた / 比 <= 0.67 -> 伸びなかった / それ以外 -> 普通 / 前の投稿が3本未満 -> 比較対象不足
+`insight` と `next_action` は空のままにし、人（またはチャットの Claude）が書き込む。
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def published(items: list[dict]) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# pull
+# 取得（pull）
 # ---------------------------------------------------------------------------
 
 def _metric_value(m: dict) -> int:
@@ -115,7 +115,7 @@ def pull(ws: Path, days: int, graph=None, now=None) -> dict:
     now = now or api.now()
     posts = [p for p in published(load_queue(queue_path(ws))) if now - p["_t"] <= dt.timedelta(days=days)]
     if not posts:
-        print("no published posts in the window")
+        print("対象期間に公開済みの投稿が無い")
         return {"pulled": 0, "errors": 0}
     graph = graph or api.Graph(common.require("threads_access_token"))
     path = ws / "metrics.csv"
@@ -126,7 +126,7 @@ def pull(ws: Path, days: int, graph=None, now=None) -> dict:
             m = post_insights(graph, p["published_id"])
         except RuntimeError as e:
             errs += 1
-            print(f"skip {p['slug']}: {api.redact(str(e))[:200]}")
+            print(f"スキップ {p['slug']}: {api.redact(str(e))[:200]}")
             continue
         rows.append({"fetched_at": api.iso(now), "date": now.date().isoformat(), "slug": p["slug"],
                      "post_id": p["published_id"], **m})
@@ -138,7 +138,7 @@ def pull(ws: Path, days: int, graph=None, now=None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# review
+# 振り返り（review）
 # ---------------------------------------------------------------------------
 
 def snapshots(rows: list[dict]) -> dict[str, list[dict]]:
@@ -153,7 +153,7 @@ def snapshots(rows: list[dict]) -> dict[str, list[dict]]:
 
 
 def build_learnings(posts: list[dict], snaps: dict, existing: list[dict], now) -> list[dict]:
-    """New rows for (slug, checkpoint) pairs that do not exist yet and whose checkpoint snapshot exists."""
+    """まだ行が無く、その時点の記録がある (slug, checkpoint) の組について、新しい行を作る。"""
     have = {(r.get("slug"), r.get("checkpoint")) for r in existing}
     new = []
     for cp, hours in CHECKPOINTS:
@@ -179,7 +179,7 @@ def build_learnings(posts: list[dict], snaps: dict, existing: list[dict], now) -
 
 
 def render_report(day: dt.date, posts: list[dict], snaps: dict, new_rows: list[dict]) -> str:
-    L = [f"# Threads review {day.isoformat()}", "", "## Latest numbers per post", ""]
+    L = [f"# Threads 振り返り {day.isoformat()}", "", "## 投稿ごとの最新の数値", ""]
     table = []
     for p in posts:
         s = (snaps.get(str(p["published_id"])) or [None])[-1]
@@ -194,18 +194,18 @@ def render_report(day: dt.date, posts: list[dict], snaps: dict, new_rows: list[d
                      f"{to_int(s.get('replies'))} | {to_int(s.get('reposts'))} | {r['er'] or '-'} | "
                      f"{str(r['hook']).replace('|', '｜')[:40]} |")
         ranked = sorted(table, key=lambda r: -r["views"])
-        L += ["", f"- Top: {ranked[0]['slug']} ({ranked[0]['views']} views)",
-              f"- Bottom: {ranked[-1]['slug']} ({ranked[-1]['views']} views)"]
+        L += ["", f"- 最も多い: {ranked[0]['slug']}（{ranked[0]['views']} views）",
+              f"- 最も少ない: {ranked[-1]['slug']}（{ranked[-1]['views']} views）"]
     else:
-        L.append("(no metrics yet - run `threads_insights.py pull`)")
-    L += ["", "## New learnings", ""]
+        L.append("（まだ数値が無い。`threads_insights.py pull` を実行してください）")
+    L += ["", "## 新しい振り返り", ""]
     if new_rows:
         L += ["| slug | checkpoint | views | ER | verdict |", "|---|---|---:|---:|---|"]
         L += [f"| {r['slug']} | {r['checkpoint']} | {r['views']} | {r['engagement_rate'] or '-'} | {r['verdict']} |"
               for r in new_rows]
-        L += ["", "Fill in `insight` and `next_action` in learnings.csv for these rows."]
+        L += ["", "learnings.csv のこれらの行の `insight` と `next_action` を書き込んでください。"]
     else:
-        L.append("(none this time)")
+        L.append("（今回は無し）")
     return "\n".join(L) + "\n"
 
 
@@ -223,17 +223,17 @@ def review(ws: Path, now=None) -> dict:
     api.atomic_write_text(rpath, report)
     for r in new_rows:
         print(f"{r['slug']} {r['checkpoint']}: views={r['views']} -> {r['verdict']}")
-    print(f"learnings: +{len(new_rows)} ({lpath}); report: {rpath}")
+    print(f"振り返り: +{len(new_rows)} 行（{lpath}）、レポート: {rpath}")
     return {"new": len(new_rows), "report": str(rpath)}
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Pull Threads metrics and write 48h/7d learnings.")
-    ap.add_argument("--workspace", help="override the workspace folder (default: settings)")
+    ap = argparse.ArgumentParser(description="Threads の数値を取得し、48時間後・7日後の振り返りを書く。")
+    ap.add_argument("--workspace", help="ワークスペースのフォルダを指定する（既定: 設定の値）")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("pull", help="append a metrics snapshot for published posts to metrics.csv")
-    p.add_argument("--days", type=int, default=30, help="only posts published within N days (default 30)")
-    sub.add_parser("review", help="write 48h/7d rows to learnings.csv and a report")
+    p = sub.add_parser("pull", help="公開済みの投稿の数値を metrics.csv に追記する")
+    p.add_argument("--days", type=int, default=30, help="N 日以内に公開した投稿だけを対象にする（既定 30）")
+    sub.add_parser("review", help="48時間・7日の行を learnings.csv に書き、レポートを作る")
     a = ap.parse_args(argv)
     ws = Path(a.workspace).expanduser() if a.workspace else common.workspace()
     try:
@@ -244,10 +244,10 @@ def main(argv: list[str] | None = None) -> int:
             review(ws)
             return 0
     except api.LockHeld as e:
-        print(f"skip: {e}", file=sys.stderr)
+        print(f"スキップ: {e}", file=sys.stderr)
         return 0
     except RuntimeError as e:
-        print(f"error: {api.redact(str(e))}", file=sys.stderr)
+        print(f"エラー: {api.redact(str(e))}", file=sys.stderr)
         return 1
 
 

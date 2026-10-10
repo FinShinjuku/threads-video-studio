@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Install a macOS launchd job that runs `threads_post.py publish-due` every 15 minutes.
+"""`threads_post.py publish-due` を15分ごとに動かす macOS の launchd ジョブを入れる。
 
-Default is a dry run: it prints the plist it would write and the launchctl commands.
-  --apply      write ~/Library/LaunchAgents/<label>.plist and `launchctl bootstrap` it (re-installs if present)
-  --uninstall  `launchctl bootout` the job and remove the plist (with --apply)
+既定は試し実行（dry run）。書く予定の plist と launchctl のコマンドを表示するだけ。
+  --apply      ~/Library/LaunchAgents/<label>.plist を書き `launchctl bootstrap` する（既にあれば入れ直す）
+  --uninstall  ジョブを `launchctl bootout` して plist を消す（--apply と併用）
 
-Notes
-  - launchd does not see the plugin settings entered in Claude, so the job reads the local config file
-    (scripts/setup.py writes it). The Threads token (and media_bucket for local videos) must be there.
-  - The job does not run from the (versioned) plugin folder: the scripts are copied to a stable runner folder,
-    ~/.config/threads-video-studio/runner/, and the plist points there. Re-run with --apply after a plugin
-    update to refresh the copy.
-  - macOS may block background access to ~/Desktop, ~/Documents and ~/Downloads; keep the workspace elsewhere
-    (default ~/threads-videos) or grant Full Disk Access to the Python binary.
+注意
+  - launchd は Claude で入力したプラグイン設定を読めない。ジョブはローカルの設定ファイル
+    （scripts/setup.py が書く）を読むので、Threads のトークン（ローカル動画なら media_bucket も）をそこに入れておく。
+  - ジョブは（バージョンごとに変わる）プラグインフォルダからは動かさない。スクリプトを固定の実行用フォルダ
+    ~/.config/threads-video-studio/runner/ にコピーし、plist はそこを指す。プラグイン更新後は --apply で
+    再実行してコピーを新しくする。
+  - macOS はバックグラウンドからの ~/Desktop・~/Documents・~/Downloads へのアクセスを止めることがある。
+    ワークスペースは別の場所（既定 ~/threads-videos）に置くか、Python にフルディスクアクセスを許可する。
 """
 
 from __future__ import annotations
@@ -49,20 +49,20 @@ def preflight() -> list[str]:
     warns = []
     cfg = common.load_file()
     if not cfg.get("threads_access_token"):
-        warns.append("the config file has no threads_access_token - launchd cannot see plugin settings; "
-                     "run: python3 scripts/setup.py set threads_access_token")
+        warns.append("設定ファイルに threads_access_token が無い。launchd はプラグイン設定を読めないので、"
+                     "python3 scripts/setup.py set threads_access_token を実行してください")
     if not cfg.get("media_bucket"):
-        warns.append("the config file has no media_bucket - posts with a local video_file will fail "
-                     "(or give --media-url when drafting)")
+        warns.append("設定ファイルに media_bucket が無い。ローカルの video_file を使う投稿は失敗する"
+                     "（下書き時に --media-url を渡せば回避できる）")
     ws = str(common.workspace())
     home = str(Path.home())
     if any(ws.startswith(f"{home}/{d}") for d in ("Desktop", "Documents", "Downloads")):
-        warns.append(f"workspace {ws} is in a privacy-protected folder; background jobs may be denied access")
+        warns.append(f"ワークスペース {ws} は macOS の保護対象フォルダにある。バックグラウンドのジョブから読めないことがある")
     return warns
 
 
 def install_runner(dest: Path = RUNNER_DIR) -> list[Path]:
-    """Copy the scripts the job needs to a stable folder (atomic per file). Returns the copied paths."""
+    """ジョブに必要なスクリプトを固定のフォルダにコピーする（ファイルごとに原子的）。コピー先のパスを返す。"""
     dest.mkdir(parents=True, exist_ok=True)
     out = []
     for name in RUNNER_FILES:
@@ -71,7 +71,7 @@ def install_runner(dest: Path = RUNNER_DIR) -> list[Path]:
         tmp.write_bytes(src.read_bytes())
         tmp.replace(dest / name)
         if (dest / name).read_bytes() != src.read_bytes():
-            raise RuntimeError(f"runner copy readback failed: {name}")
+            raise RuntimeError(f"実行用フォルダへのコピーを読み戻したら一致しない: {name}")
         out.append(dest / name)
     return out
 
@@ -79,21 +79,21 @@ def install_runner(dest: Path = RUNNER_DIR) -> list[Path]:
 def launchctl(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     r = subprocess.run(["launchctl", *args], capture_output=True, text=True)
     if check and r.returncode != 0:
-        raise RuntimeError(f"launchctl {args[0]} failed: {(r.stderr or r.stdout).strip()[:300]}")
+        raise RuntimeError(f"launchctl {args[0]} が失敗: {(r.stderr or r.stdout).strip()[:300]}")
     return r
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Install the 15-minute publish-due launchd job (macOS). "
-                                             "Dry run by default.")
-    ap.add_argument("--apply", action="store_true", help="actually write the plist and bootstrap it")
-    ap.add_argument("--uninstall", action="store_true", help="remove the job (with --apply)")
-    ap.add_argument("--interval", type=int, default=900, help="seconds between runs (default 900)")
-    ap.add_argument("--max", type=int, default=3, help="max posts per run (default 3)")
-    ap.add_argument("--python", default=sys.executable, help="python3 to run the job with")
+    ap = argparse.ArgumentParser(description="15分ごとに publish-due を動かす launchd ジョブを入れる（macOS）。"
+                                             "既定は試し実行。")
+    ap.add_argument("--apply", action="store_true", help="実際に plist を書いて bootstrap する")
+    ap.add_argument("--uninstall", action="store_true", help="ジョブを外す（--apply と併用）")
+    ap.add_argument("--interval", type=int, default=900, help="実行の間隔（秒、既定 900）")
+    ap.add_argument("--max", type=int, default=3, help="1回で投稿する最大件数（既定 3）")
+    ap.add_argument("--python", default=sys.executable, help="ジョブを動かす python3")
     a = ap.parse_args(argv)
     if sys.platform != "darwin":
-        print("error: launchd is macOS only - use templates/cowork-scheduled-task.md or cron instead", file=sys.stderr)
+        print("エラー: launchd は macOS 専用。templates/cowork-scheduled-task.md か cron を使ってください", file=sys.stderr)
         return 1
     plist = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
     log = Path.home() / "Library" / "Logs" / "threads-video-studio" / "publish.log"
@@ -105,18 +105,18 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         launchctl("bootout", f"{domain}/{LABEL}", check=False)
         plist.unlink(missing_ok=True)
-        print(f"removed {LABEL}")
+        print(f"{LABEL} を外した")
         return 0
 
     text = render_plist(a.python, a.interval, a.max, log)
     for w in preflight():
-        print(f"warning: {w}")
+        print(f"警告: {w}")
     if not a.apply:
-        print(f"[dry-run] would write {plist}:\n{text}")
-        print(f"[dry-run] copy {', '.join(RUNNER_FILES)} -> {RUNNER_DIR}/")
-        print(f"[dry-run] launchctl bootout {domain}/{LABEL} (if loaded)")
+        print(f"[dry-run] {plist} に次を書く予定:\n{text}")
+        print(f"[dry-run] {', '.join(RUNNER_FILES)} を {RUNNER_DIR}/ にコピー")
+        print(f"[dry-run] launchctl bootout {domain}/{LABEL}（読み込み済みなら）")
         print(f"[dry-run] launchctl bootstrap {domain} {plist}")
-        print("re-run with --apply to install")
+        print("入れるには --apply を付けて再実行する")
         return 0
     try:
         install_runner()
@@ -130,9 +130,9 @@ def main(argv: list[str] | None = None) -> int:
         launchctl("bootstrap", domain, str(plist))
         launchctl("print", f"{domain}/{LABEL}")
     except (RuntimeError, subprocess.CalledProcessError) as e:
-        print(f"error: {e}", file=sys.stderr)
+        print(f"エラー: {e}", file=sys.stderr)
         return 1
-    print(f"installed {LABEL}: every {a.interval}s, runner {RUNNER_DIR}, log {log}")
+    print(f"{LABEL} を入れた: {a.interval} 秒ごと、実行用フォルダ {RUNNER_DIR}、ログ {log}")
     return 0
 
 

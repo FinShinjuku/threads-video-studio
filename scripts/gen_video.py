@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Image-to-video per cut on the fal queue. Resumable and safe to re-run.
+"""カットごとに fal のキューで画像から動画を作る。途中から再開でき、何度実行しても安全。
 
-  python3 gen_video.py --project t004-camp --cut c01 --dry-run     # cost estimate only
-  python3 gen_video.py --project t004-camp --cut c01 --draft       # cheap/fast preview -> clips/c01-draft.mp4
-  python3 gen_video.py --project t004-camp --all                   # all cuts, up to 5 in parallel
+  python3 gen_video.py --project t004-camp --cut c01 --dry-run     # 費用の見積もりだけ
+  python3 gen_video.py --project t004-camp --cut c01 --draft       # 安く速い下書き -> clips/c01-draft.mp4
+  python3 gen_video.py --project t004-camp --all                   # 全カット（最大5本並行）
 
-Reads prompt / frame / end_frame / refs / dur / model from shots.json. `dur` is rounded UP to the
-next duration the model accepts. Nothing unsupported is sent silently: invalid values stop with "Allowed: ...".
+shots.json から prompt / frame / end_frame / refs / dur / model を読む。`dur` はモデルが受け付ける
+長さに切り上げる。対応していない値は黙って送らず、「使える値: ...」を出して止まる。
 
-Resume: the request id is written to clips/<cut>.task right after submission. Re-running picks it up.
-Finished clips (clips/<cut>.mp4) are skipped unless --force. Audio is never generated.
+再開: 送信直後に request id を clips/<cut>.task に書く。再実行するとそこから続ける。
+できあがったクリップ（clips/<cut>.mp4）は --force がなければ飛ばす。音声は作らない。
 
-Drafts: --draft --variants 3 makes clips/<cut>-draft-v1.mp4 ... v3 (each with its own .task).
-Cost: --dry-run --with-draft prints the draft plan, the final plan and the total of both.
-Input images (frame / end_frame / refs) must be inside the project folder.
+下書き: --draft --variants 3 で clips/<cut>-draft-v1.mp4 〜 v3 を作る（それぞれ別の .task）。
+費用: --dry-run --with-draft で下書きと本番の計画、両方の合計を出す。
+入力画像（frame / end_frame / refs）はプロジェクトフォルダの中に置く。
 """
 
 from __future__ import annotations
@@ -32,18 +32,18 @@ import common
 
 R_480_720_1080_4K = ["480p", "720p", "1080p", "4k"]
 
-# Allowed values and prices were read from https://fal.ai/models/<endpoint>/llms.txt on 2026-10-10.
-# Seedance price = tokens * rate, tokens/s = w*h*24/1024 (9:16 sizes: 480x854, 720x1280, 1080x1920, 2160x3840).
+# 使える値と料金は 2026-10-10 に https://fal.ai/models/<endpoint>/llms.txt から確認した。
+# Seedance の料金 = トークン数 × 単価、1秒あたりトークン数 = w*h*24/1024（9:16 のサイズ: 480x854, 720x1280, 1080x1920, 2160x3840）。
 MODELS: dict[str, dict] = {
     "seedance20": {
         "endpoint": "bytedance/seedance-2.0/image-to-video",
-        "mode": "first",                       # start frame (+ optional end frame)
+        "mode": "first",                       # 開始フレーム（終了フレームは任意）
         "image_key": "image_url", "end_key": "end_image_url",
         "durations": list(range(4, 16)), "dur_format": "{}",
         "resolutions": R_480_720_1080_4K, "default_resolution": "720p",
         "aspect_ratio": "9:16", "audio_key": "generate_audio",
         "draft": ("seedance20-fast", "480p"),
-        # USD/s, checked 2026-10-10 ($0.014 per 1k tokens; 4k $0.008 per 1k tokens)
+        # 1秒あたり USD、2026-10-10 確認（1k トークンあたり $0.014。4k は 1k トークンあたり $0.008）
         "usd_per_sec": {"480p": 0.1345, "720p": 0.3034, "1080p": 0.682, "4k": 1.555},
     },
     "seedance20-fast": {
@@ -54,18 +54,18 @@ MODELS: dict[str, dict] = {
         "resolutions": ["480p", "720p"], "default_resolution": "720p",
         "aspect_ratio": "9:16", "audio_key": "generate_audio",
         "draft": ("seedance20-fast", "480p"),
-        # USD/s, checked 2026-10-10 ($0.0112 per 1k tokens)
+        # 1秒あたり USD、2026-10-10 確認（1k トークンあたり $0.0112）
         "usd_per_sec": {"480p": 0.1076, "720p": 0.2419},
     },
     "seedance20-ref": {
         "endpoint": "bytedance/seedance-2.0/reference-to-video",
-        "mode": "ref",                         # refs -> image_urls (@Image1, @Image2 ... in the prompt)
+        "mode": "ref",                         # refs -> image_urls（プロンプトでは @Image1, @Image2 ... で参照）
         "refs_key": "image_urls", "max_refs": 9,
         "durations": list(range(4, 16)), "dur_format": "{}",
         "resolutions": R_480_720_1080_4K, "default_resolution": "720p",
         "aspect_ratio": "9:16", "audio_key": "generate_audio",
         "draft": ("seedance20-ref", "480p"),
-        # USD/s, checked 2026-10-10 (image references only; same token rate as image-to-video)
+        # 1秒あたり USD、2026-10-10 確認（画像参照のみ。トークン単価は image-to-video と同じ）
         "usd_per_sec": {"480p": 0.1345, "720p": 0.3034, "1080p": 0.682, "4k": 1.555},
     },
     "veo31-fast": {
@@ -76,20 +76,20 @@ MODELS: dict[str, dict] = {
         "resolutions": ["720p", "1080p", "4k"], "default_resolution": "720p",
         "aspect_ratio": "9:16", "audio_key": "generate_audio",
         "draft": ("veo31-fast", "720p"),
-        "deprecated": "2026-10-22",            # fal API page: "This endpoint will be deprecated on October 22, 2026."
-        # USD/s without audio, checked 2026-10-10
+        "deprecated": "2026-10-22",            # fal の API ページの記載: "This endpoint will be deprecated on October 22, 2026."
+        # 音声なしの1秒あたり USD、2026-10-10 確認
         "usd_per_sec": {"720p": 0.10, "1080p": 0.10, "4k": 0.30},
     },
     "veo31-fast-flf": {
         "endpoint": "fal-ai/veo3.1/fast/first-last-frame-to-video",
-        "mode": "first-last",                  # end_frame is required
+        "mode": "first-last",                  # end_frame が必須
         "image_key": "first_frame_url", "end_key": "last_frame_url", "end_required": True,
         "durations": [4, 6, 8], "dur_format": "{}s",
         "resolutions": ["720p", "1080p", "4k"], "default_resolution": "720p",
         "aspect_ratio": "9:16", "audio_key": "generate_audio",
         "draft": ("veo31-fast-flf", "720p"),
-        "deprecated": "2026-10-22",            # fal API page: "This endpoint will be deprecated on October 22, 2026."
-        # USD/s without audio, checked 2026-10-10
+        "deprecated": "2026-10-22",            # fal の API ページの記載: "This endpoint will be deprecated on October 22, 2026."
+        # 音声なしの1秒あたり USD、2026-10-10 確認
         "usd_per_sec": {"720p": 0.10, "1080p": 0.10, "4k": 0.30},
     },
     "kling30": {
@@ -97,12 +97,12 @@ MODELS: dict[str, dict] = {
         "mode": "first",
         "image_key": "start_image_url", "end_key": "end_image_url",
         "durations": list(range(3, 16)), "dur_format": "{}",
-        # No resolution / aspect_ratio parameter (re-checked 2026-10-10): output follows the start image,
-        # so the frame itself must be 9:16. duration "3".."15".
+        # resolution / aspect_ratio の指定はない（2026-10-10 再確認）。出力は開始画像に合わせるので、
+        # フレーム画像そのものを 9:16 にする。duration は "3"〜"15"。
         "resolutions": [], "default_resolution": None,
         "aspect_ratio": None, "audio_key": "generate_audio",
         "draft": ("kling30", None),
-        # USD/s audio off, checked 2026-10-10
+        # 音声オフの1秒あたり USD、2026-10-10 確認
         "usd_per_sec": {None: 0.112},
     },
 }
@@ -119,10 +119,10 @@ def say(*a) -> None:
         print(*a, flush=True)
 
 
-# --- pure helpers (unit-tested) -------------------------------------------------------------
+# --- 純粋な補助関数（単体テストあり） -------------------------------------------------------------
 
 def round_up_duration(model: str, dur: float | None) -> int:
-    """Smallest allowed duration >= dur. Missing/zero dur -> the model's minimum."""
+    """dur 以上で最小の使える長さを返す。dur が無いか 0 ならモデルの最小値。"""
     allowed = MODELS[model]["durations"]
     if not dur or dur <= 0:
         return allowed[0]
@@ -130,24 +130,24 @@ def round_up_duration(model: str, dur: float | None) -> int:
     for d in allowed:
         if d >= need:
             return d
-    raise ValueError(f"duration {dur}s too long for {model}. Allowed: {', '.join(map(str, allowed))} (seconds)")
+    raise ValueError(f"長さ {dur}秒 は {model} には長すぎる。使える値: {', '.join(map(str, allowed))}（秒）")
 
 
 def check_resolution(model: str, res: str | None) -> str | None:
     allowed = MODELS[model]["resolutions"]
     if not allowed:
         if res:
-            raise ValueError(f"{model} has no resolution option (output follows the start image). Allowed: (none)")
+            raise ValueError(f"{model} には解像度の指定がない（出力は開始画像に合わせる）。使える値: (なし)")
         return None
     if res not in allowed:
-        raise ValueError(f"resolution {res!r} not supported by {model}. Allowed: {', '.join(allowed)}")
+        raise ValueError(f"解像度 {res!r} は {model} では使えない。使える値: {', '.join(allowed)}")
     return res
 
 
 def pick_model_and_res(cut: dict, model_arg: str | None, res_arg: str | None, draft: bool) -> tuple[str, str | None]:
     model = model_arg or cut.get("model") or "seedance20"
     if model not in MODELS:
-        raise ValueError(f"unknown model {model!r}. Allowed: {', '.join(MODELS)}")
+        raise ValueError(f"不明なモデル {model!r}。使える値: {', '.join(MODELS)}")
     if draft:
         model, res = MODELS[model]["draft"]
         if res_arg:
@@ -164,7 +164,7 @@ def estimate_cost(model: str, res: str | None, seconds: int) -> float:
 
 
 def task_state(clips: Path, name: str, force: bool = False) -> str:
-    """'done' (mp4 exists), 'resume' (.task pending), 'locked' (.task.locked only), or 'new'."""
+    """'done'（mp4 がある）、'resume'（.task が残っている）、'locked'（.task.locked だけある）、'new' のどれかを返す。"""
     if (clips / f"{name}.task").exists():
         return "resume"
     if (clips / f"{name}.mp4").exists() and not force:
@@ -181,21 +181,21 @@ def read_task(path: Path) -> dict:
     except ValueError:
         t = None
     if not isinstance(t, dict):
-        t = {"request_id": raw}  # plain request id (older format)
+        t = {"request_id": raw}  # request id だけの古い形式
     rid = t.get("request_id")
     if not isinstance(rid, str) or not RID_RE.fullmatch(rid):
-        raise RuntimeError(f"{path.name} has no valid request_id (allowed: letters, digits and '-')")
+        raise RuntimeError(f"{path.name} に正しい request_id がない（使える文字: 英字・数字・'-'）")
     return t
 
 
 def queue_urls(endpoint: str, request_id: str) -> tuple[str, str]:
-    """Status and result URLs, always rebuilt from a registry endpoint + validated request id (never taken
-    from a saved file, so the API key is only ever sent to queue.fal.run). Queue paths use only the base
-    app (owner/app = first two segments), e.g. fal-ai/veo3.1/fast/image-to-video -> fal-ai/veo3.1."""
+    """状態確認と結果取得の URL を返す。毎回、登録済みのエンドポイントと検証済みの request id から組み立てる
+    （保存ファイルの URL は使わないので、API キーは queue.fal.run にしか送られない）。キューのパスは
+    先頭2区切り（owner/app）だけを使う。例: fal-ai/veo3.1/fast/image-to-video -> fal-ai/veo3.1。"""
     if endpoint not in {m["endpoint"] for m in MODELS.values()}:
-        raise ValueError(f"unknown endpoint {endpoint!r}")
+        raise ValueError(f"不明なエンドポイント {endpoint!r}")
     if not isinstance(request_id, str) or not RID_RE.fullmatch(request_id):
-        raise ValueError("invalid request id (allowed: letters, digits and '-')")
+        raise ValueError("request id が正しくない（使える文字: 英字・数字・'-'）")
     app = "/".join(endpoint.split("/")[:2])
     base = f"https://queue.fal.run/{app}/requests/{request_id}"
     return base + "/status", base
@@ -206,13 +206,13 @@ def deprecation_warning(model: str, today: str | None = None) -> str | None:
     if not dep:
         return None
     today = today or time.strftime("%Y-%m-%d")
-    when = "was deprecated on" if today >= dep else "will be deprecated on"
-    return (f"WARN: {model} ({MODELS[model]['endpoint']}) {when} {dep} according to fal; "
-            f"prefer seedance20 / kling30")
+    when = "で廃止済み" if today >= dep else "で廃止予定"
+    return (f"警告: fal によると {model}（{MODELS[model]['endpoint']}）は {dep} {when}。"
+            f"seedance20 / kling30 を使う")
 
 
 def job_name(cut_id: str, draft: bool, variant: int | None = None) -> str:
-    name = common.check_id(cut_id, "cut id") + ("-draft" if draft else "")
+    name = common.check_id(cut_id, "カット ID") + ("-draft" if draft else "")
     return name + (f"-v{variant}" if variant else "")
 
 
@@ -220,13 +220,13 @@ def is_locked_error(e: Exception) -> bool:
     return isinstance(e, common.HttpError) and e.code == 403 and "locked" in (e.body or "").lower()
 
 
-# --- request building -----------------------------------------------------------------------
+# --- リクエストの組み立て -----------------------------------------------------------------------
 
 def build_body(model: str, cut: dict, project: Path, prompt: str, seconds: int, res: str | None,
                images: bool = True) -> dict:
     m = MODELS[model]
     def uri(p):
-        path = common.safe_path(project, p, f"{cut['id']} image")
+        path = common.safe_path(project, p, f"{cut['id']} の画像")
         return common.data_uri(path) if images else f"<{p}>"
 
     body: dict = {"prompt": prompt, "duration": m["dur_format"].format(seconds)}
@@ -239,22 +239,22 @@ def build_body(model: str, cut: dict, project: Path, prompt: str, seconds: int, 
     if m["mode"] in ("first", "first-last"):
         frame = cut.get("frame")
         if not frame:
-            raise ValueError(f"{cut['id']}: 'frame' is required for {model}")
+            raise ValueError(f"{cut['id']}: {model} には 'frame' が必要")
         body[m["image_key"]] = uri(frame)
         end = cut.get("end_frame")
         if m.get("end_required") and not end:
-            raise ValueError(f"{cut['id']}: 'end_frame' is required for {model}")
+            raise ValueError(f"{cut['id']}: {model} には 'end_frame' が必要")
         if end:
             if not m.get("end_key"):
-                raise ValueError(f"{cut['id']}: {model} does not take an end frame. "
-                                 f"Allowed models with end frame: seedance20, seedance20-fast, veo31-fast-flf, kling30")
+                raise ValueError(f"{cut['id']}: {model} は終了フレームを使えない。"
+                                 f"終了フレームを使えるモデル: seedance20, seedance20-fast, veo31-fast-flf, kling30")
             body[m["end_key"]] = uri(end)
     elif m["mode"] == "ref":
         refs = list(cut.get("refs") or []) or ([cut["frame"]] if cut.get("frame") else [])
         if not refs:
-            raise ValueError(f"{cut['id']}: 'refs' (or 'frame') is required for {model}")
+            raise ValueError(f"{cut['id']}: {model} には 'refs'（または 'frame'）が必要")
         if len(refs) > m["max_refs"]:
-            raise ValueError(f"{cut['id']}: too many refs. Allowed: up to {m['max_refs']}")
+            raise ValueError(f"{cut['id']}: refs が多すぎる。使える値: {m['max_refs']} 枚まで")
         body[m["refs_key"]] = [uri(r) for r in refs]
     return body
 
@@ -267,11 +267,11 @@ def check_inputs(cut: dict, project: Path, model: str) -> None:
     else:
         paths = [cut.get("frame"), cut.get("end_frame")]
     for p in paths:
-        if p and not common.safe_path(project, p, f"{cut['id']} image").exists():
-            raise FileNotFoundError(f"{cut['id']}: input image not found: {p}")
+        if p and not common.safe_path(project, p, f"{cut['id']} の画像").exists():
+            raise FileNotFoundError(f"{cut['id']}: 入力画像が見つからない: {p}")
 
 
-# --- one cut ---------------------------------------------------------------------------------
+# --- 1カット分 ---------------------------------------------------------------------------------
 
 class Job:
     def __init__(self, project: Path, cut: dict, model: str, res: str | None, draft: bool, force: bool,
@@ -286,7 +286,7 @@ class Job:
         self.prompt = (cut.get("prompt") or "").strip()
 
     def describe(self) -> str:
-        return (f"{self.name}: {self.model} {self.res or '(native)'} {self.seconds}s "
+        return (f"{self.name}: {self.model} {self.res or '(元画像のまま)'} {self.seconds}s "
                 f"(dur {self.cut.get('dur')}) ~${self.cost:.2f} [{self.state}]")
 
 
@@ -301,19 +301,19 @@ def run_job(job: Job, timeout: int) -> str:
         task = read_task(task_file)
         saved_model = task.get("model") or job.model
         if saved_model not in MODELS:
-            raise RuntimeError(f"{name}: {task_file.name} names an unknown model {saved_model!r}")
-        endpoint = MODELS[saved_model]["endpoint"]  # never a URL/endpoint string from the file
-        say(f"{name}: resume {task['request_id']}")
+            raise RuntimeError(f"{name}: {task_file.name} のモデル {saved_model!r} が不明")
+        endpoint = MODELS[saved_model]["endpoint"]  # ファイルにある URL やエンドポイント文字列は使わない
+        say(f"{name}: 再開 {task['request_id']}")
     else:
         body = build_body(job.model, job.cut, job.project, job.prompt, job.seconds, job.res)
         sub = common.http_json("POST", f"https://queue.fal.run/{endpoint}", headers, body, timeout=180, retries=1)
         rid = sub.get("request_id")
         if not rid or not RID_RE.fullmatch(str(rid)):
-            raise RuntimeError(f"{name}: missing or invalid request_id in submit response")
+            raise RuntimeError(f"{name}: 送信の応答に request_id がないか、正しくない")
         task = {"request_id": rid, "model": job.model, "resolution": job.res, "duration": job.seconds,
                 "submitted_at": time.strftime("%Y-%m-%dT%H:%M:%S"), "estimated_cost_usd": job.cost}
         common.save_json(task_file, task)
-        say(f"{name}: queued {rid} (~${job.cost:.2f})")
+        say(f"{name}: キューに登録 {rid}（約 ${job.cost:.2f}）")
 
     rid = task["request_id"]
     status_url, result_url = queue_urls(endpoint, rid)
@@ -323,7 +323,7 @@ def run_job(job: Job, timeout: int) -> str:
             try:
                 st = common.http_json("GET", status_url, headers, timeout=60)
             except common.NetworkError as e:
-                say(f"{name}: poll network error, retrying ({e})")
+                say(f"{name}: 状態確認中に通信エラー。やり直す（{e}）")
                 time.sleep(POLL_SEC)
                 continue
             s = st.get("status", "")
@@ -333,32 +333,32 @@ def run_job(job: Job, timeout: int) -> str:
             if s == "COMPLETED":
                 break
             if time.time() - t0 > timeout:
-                raise RuntimeError(f"{name}: still {s or 'pending'} after {timeout}s; re-run to resume ({task_file.name} kept)")
+                raise RuntimeError(f"{name}: {timeout}秒たっても {s or '待機中'}。再実行すると続きから再開する（{task_file.name} は残してある）")
             time.sleep(POLL_SEC)
         while True:
             try:
                 res = common.http_json("GET", result_url, headers, timeout=120)
                 break
             except common.NetworkError as e:
-                say(f"{name}: result network error, retrying ({e})")
+                say(f"{name}: 結果の取得中に通信エラー。やり直す（{e}）")
                 time.sleep(POLL_SEC)
     except common.HttpError as e:
         if is_locked_error(e):
             locked = clips / f"{name}.task.locked"
             task_file.replace(locked)
             raise RuntimeError(
-                f"{name}: account is locked (balance ran out). Results completed while locked cannot be "
-                f"retrieved. Top up, then generate again. Moved {task_file.name} -> {locked.name}") from None
+                f"{name}: アカウントがロックされた（残高切れ）。ロック中に完成した結果は取り出せない。"
+                f"残高を追加してから作り直す。{task_file.name} を {locked.name} に移した") from None
         if e.code in (404, 410):
-            raise RuntimeError(f"{name}: request {rid} not found or expired ({e.code}). "
-                               f"Delete {task_file.name} to generate again.") from None
+            raise RuntimeError(f"{name}: リクエスト {rid} が見つからないか期限切れ（{e.code}）。"
+                               f"{task_file.name} を消すと作り直せる") from None
         raise
 
     video = res.get("video") or {}
     if not video.get("url"):
         detail = res.get("detail") or res.get("error") or str(res)[:300]
-        raise RuntimeError(f"{name}: generation finished without a video: {detail} "
-                           f"(delete {task_file.name} to try again)")
+        raise RuntimeError(f"{name}: 生成は終わったが動画がない: {detail} "
+                           f"（{task_file.name} を消すとやり直せる）")
     out = clips / f"{name}.mp4"
     common.media_url_to_file(video["url"], out)
     meta = {
@@ -371,7 +371,7 @@ def run_job(job: Job, timeout: int) -> str:
     }
     common.save_json(clips / f"{name}.json", meta)
     task_file.unlink(missing_ok=True)
-    say(f"{name}: done -> {out.relative_to(job.project)} ({time.time() - t0:.0f}s)")
+    say(f"{name}: 完了 -> {out.relative_to(job.project)}（{time.time() - t0:.0f}秒）")
     return str(out)
 
 
@@ -387,9 +387,9 @@ def plan_jobs(project: Path, cuts: dict, ids: list[str], model_arg: str | None, 
             job = Job(project, cut, model, res, draft, force, v)
             if job.state in ("new", "locked"):
                 if not job.prompt:
-                    raise ValueError(f"{cid}: empty prompt in shots.json")
+                    raise ValueError(f"{cid}: shots.json の prompt が空")
                 check_inputs(cut, project, model)
-                build_body(model, cut, project, job.prompt, job.seconds, res, images=False)  # validates fields
+                build_body(model, cut, project, job.prompt, job.seconds, res, images=False)  # 項目の検証だけ
             jobs.append(job)
     return jobs
 
@@ -401,57 +401,57 @@ def print_plan(title: str, jobs: list[Job]) -> float:
         print(f"== {title}")
     for j in jobs:
         print(j.describe())
-    print(f"to submit: {sum(1 for j in todo if j.state in ('new', 'locked'))}, "
-          f"to resume: {sum(1 for j in todo if j.state == 'resume')}, "
-          f"estimated new spend: ${spend:.2f}")
+    print(f"新規送信: {sum(1 for j in todo if j.state in ('new', 'locked'))}、"
+          f"再開: {sum(1 for j in todo if j.state == 'resume')}、"
+          f"新たにかかる費用の見積もり: ${spend:.2f}")
     return spend
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Generate video clips per cut on fal (resumable).")
-    ap.add_argument("--project", help="project folder or slug (default: current folder)")
+    ap = argparse.ArgumentParser(description="fal でカットごとに動画クリップを作る（途中から再開できる）。")
+    ap.add_argument("--project", help="プロジェクトのフォルダまたはスラッグ（省略時は今のフォルダ）")
     g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument("--cut", action="append", help="cut id, e.g. c01 (repeatable)")
-    g.add_argument("--all", action="store_true", help="all cuts in shots.json")
-    ap.add_argument("--model", help=f"override shots.json model ({', '.join(MODELS)})")
-    ap.add_argument("--resolution", help="override resolution (validated per model)")
+    g.add_argument("--cut", action="append", help="カット id。例: c01（複数回指定できる）")
+    g.add_argument("--all", action="store_true", help="shots.json の全カット")
+    ap.add_argument("--model", help=f"shots.json のモデルを上書きする（{', '.join(MODELS)}）")
+    ap.add_argument("--resolution", help="解像度を上書きする（モデルごとに検証する）")
     ap.add_argument("--draft", action="store_true",
-                    help="draft settings (seedance20 -> seedance20-fast 480p, others lowest resolution); "
-                         "writes clips/<cut>-draft.mp4")
+                    help="下書きの設定で作る（seedance20 は seedance20-fast 480p、ほかは最低解像度）。"
+                         "clips/<cut>-draft.mp4 に書く")
     ap.add_argument("--variants", type=int,
-                    help=f"with --draft: N drafts per cut -> clips/<cut>-draft-v1.mp4 ... (1-{MAX_VARIANTS})")
-    ap.add_argument("--dry-run", action="store_true", help="print the plan and cost estimate; submit nothing")
+                    help=f"--draft と併用: 1カットにつき N 本の下書き -> clips/<cut>-draft-v1.mp4 ...（1〜{MAX_VARIANTS}）")
+    ap.add_argument("--dry-run", action="store_true", help="計画と費用の見積もりだけ出す。送信はしない")
     ap.add_argument("--with-draft", action="store_true",
-                    help="with --dry-run: estimate drafts and final clips together and print the total")
-    ap.add_argument("--force", action="store_true", help="regenerate even if the clip exists")
-    ap.add_argument("--timeout", type=int, default=2400, help="max seconds to wait per cut (default 2400)")
+                    help="--dry-run と併用: 下書きと本番をまとめて見積もり、合計を出す")
+    ap.add_argument("--force", action="store_true", help="クリップがあっても作り直す")
+    ap.add_argument("--timeout", type=int, default=2400, help="1カットあたりの最大待ち時間（秒、既定 2400）")
     a = ap.parse_args()
 
     if a.variants is not None:
         if not a.draft and not a.with_draft:
-            raise ValueError("--variants needs --draft (or --dry-run --with-draft)")
+            raise ValueError("--variants には --draft（または --dry-run --with-draft）が必要")
         if not 1 <= a.variants <= MAX_VARIANTS:
-            raise ValueError(f"--variants out of range. Allowed: 1-{MAX_VARIANTS}")
+            raise ValueError(f"--variants が範囲外。使える値: 1-{MAX_VARIANTS}")
     if a.with_draft and not a.dry_run:
-        raise ValueError("--with-draft is an estimate option; use it with --dry-run")
+        raise ValueError("--with-draft は見積もり用。--dry-run と一緒に使う")
 
     project = common.project_dir(a.project)
     shots = common.load_shots(project)
     cuts = {}
     for c in shots.get("cuts", []):
-        cuts[common.check_id(c.get("id", ""), "cut id")] = c
+        cuts[common.check_id(c.get("id", ""), "カット ID")] = c
     ids = list(cuts) if a.all else a.cut
     for cid in ids:
-        common.check_id(cid, "cut id")
+        common.check_id(cid, "カット ID")
         if cid not in cuts:
-            raise ValueError(f"unknown cut {cid!r}. Allowed: {', '.join(cuts)}")
+            raise ValueError(f"不明なカット {cid!r}。使える値: {', '.join(cuts)}")
 
     if a.with_draft:
         drafts = plan_jobs(project, cuts, ids, a.model, None, True, a.force, a.variants)
         finals = plan_jobs(project, cuts, ids, a.model, a.resolution, False, a.force)
         _warn_deprecated(drafts + finals)
-        total = print_plan("draft", drafts) + print_plan("final", finals)
-        print(f"total (draft + final): ${total:.2f}")
+        total = print_plan("下書き", drafts) + print_plan("本番", finals)
+        print(f"合計（下書き + 本番）: ${total:.2f}")
         return
 
     jobs = plan_jobs(project, cuts, ids, a.model, a.resolution, a.draft, a.force, a.variants)
@@ -467,12 +467,12 @@ def main() -> None:
         for f in as_completed(futs):
             try:
                 f.result()
-            except Exception as e:  # report every cut, then fail once
+            except Exception as e:  # 全カットの結果を出してから、まとめて失敗にする
                 failures.append(f"{futs[f].name}: {common.scrub(str(e))}")
     if failures:
         for msg in failures:
-            print("FAILED " + msg, file=sys.stderr)
-        raise RuntimeError(f"{len(failures)} of {len(todo)} cut(s) failed")
+            print("失敗 " + msg, file=sys.stderr)
+        raise RuntimeError(f"{len(todo)} カット中 {len(failures)} カットが失敗")
 
 
 def _warn_deprecated(jobs: list[Job]) -> None:

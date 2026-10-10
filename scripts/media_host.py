@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Stage a local video on a private S3 bucket and print a 1-hour presigned https URL.
+"""ローカルの動画を非公開の S3 バケットに置き、1時間有効な署名付き https URL を作る。
 
-The Threads publishing API pulls media from a public URL, so the local file is copied to a private
-bucket and a short-lived presigned URL is handed to Threads. The URL is never stored (it expires).
+Threads の投稿 API は公開 URL から動画を取りに来る。そこでローカルのファイルを非公開バケットにコピーし、
+短時間だけ有効な署名付き URL を Threads に渡す。URL は保存しない（期限が切れるため）。
 
-Settings (see common.SETTINGS): media_bucket (required), aws_profile, aws_region (optional).
-Requires the `aws` CLI. Arguments are passed to subprocess as a list (no shell word-splitting issues).
+設定（common.SETTINGS 参照）: media_bucket（必須）、aws_profile・aws_region（任意）。
+`aws` CLI が必要。引数は subprocess にリストで渡す（シェルの単語分割の問題が起きない）。
 
-Usage:
-  python3 media_host.py <file>                 # upload; prints the s3:// location (URL hidden)
-  python3 media_host.py <file> --show-url      # also print the presigned URL
-  python3 media_host.py --create-bucket        # create/harden the bucket (private, SSE-S3, delete after 1 day)
+使い方:
+  python3 media_host.py <file>                 # アップロードし、s3:// の場所を表示する（URL は伏せる）
+  python3 media_host.py <file> --show-url      # 署名付き URL も表示する
+  python3 media_host.py --create-bucket        # バケットを作り、守りを固める（非公開・SSE-S3・1日で削除）
   python3 media_host.py --create-bucket --dry-run
-  python3 media_host.py --check                # read back the bucket settings only
+  python3 media_host.py --check                # バケットの設定を読み戻すだけ
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common  # noqa: E402
 from threads_api import redact  # noqa: E402
 
-PRESIGN_S = 3600  # covers container creation + up to 10 minutes of processing
+PRESIGN_S = 3600  # コンテナ作成と最大10分の処理を十分にまかなう長さ
 PREFIX = "threads"
 LIFECYCLE = {"Rules": [{"ID": "expire-after-1-day", "Status": "Enabled", "Filter": {"Prefix": ""},
                         "Expiration": {"Days": 1},
@@ -41,7 +41,7 @@ PUBLIC_BLOCK = {"BlockPublicAcls": True, "IgnorePublicAcls": True, "BlockPublicP
 
 
 def local_path(v: str) -> Path | None:
-    """Expand ~ and return the Path if it is an existing file, else None."""
+    """~ を展開し、既存のファイルなら Path を、そうでなければ None を返す。"""
     v = (v or "").strip()
     if not v:
         return None
@@ -63,28 +63,28 @@ def aws(*args: str, check: bool = True, timeout: int = 900) -> subprocess.Comple
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except FileNotFoundError:
-        raise RuntimeError("aws CLI not found on PATH (install AWS CLI v2)") from None
+        raise RuntimeError("PATH に aws CLI が無い（AWS CLI v2 を入れてください）") from None
     if check and r.returncode != 0:
-        raise RuntimeError(f"aws {' '.join(args[:2])} failed: {redact(r.stderr.strip())[:300]}")
+        raise RuntimeError(f"aws {' '.join(args[:2])} が失敗: {redact(r.stderr.strip())[:300]}")
     return r
 
 
 def stage(path: str | Path, presign_s: int = PRESIGN_S) -> str:
-    """Upload the file and return a presigned https URL (for other scripts; never print or store it)."""
+    """ファイルをアップロードし、署名付き https URL を返す（他のスクリプト用。表示も保存もしない）。"""
     return stage_with_location(path, presign_s)[0]
 
 
 def stage_with_location(path: str | Path, presign_s: int = PRESIGN_S) -> tuple[str, str]:
-    """Upload the file; return (presigned URL, s3://bucket/key)."""
+    """ファイルをアップロードし、(署名付き URL, s3://bucket/key) を返す。"""
     p = Path(path)
     if not p.is_file():
-        raise RuntimeError(f"file not found: {p}")
+        raise RuntimeError(f"ファイルが無い: {p}")
     bucket = common.require("media_bucket")
     key = f"{PREFIX}/{dt.date.today():%Y%m%d}/{uuid.uuid4().hex[:12]}-{p.name}"
     aws("s3", "cp", str(p), f"s3://{bucket}/{key}", "--only-show-errors")
     url = aws("s3", "presign", f"s3://{bucket}/{key}", "--expires-in", str(presign_s)).stdout.strip()
     if not url.startswith("https://"):
-        raise RuntimeError("presigned URL is not https")
+        raise RuntimeError("署名付き URL が https ではない")
     return url, f"s3://{bucket}/{key}"
 
 
@@ -96,7 +96,7 @@ def _json(r: subprocess.CompletedProcess) -> dict:
 
 
 def check_bucket(bucket: str) -> dict:
-    """Read back the hardening settings. Returns {"public_block", "encryption", "lifecycle"} -> bool."""
+    """守りの設定を読み戻す。{"public_block", "encryption", "lifecycle"} -> bool を返す。"""
     pab = _json(aws("s3api", "get-public-access-block", "--bucket", bucket, check=False))
     enc = _json(aws("s3api", "get-bucket-encryption", "--bucket", bucket, check=False))
     lc = _json(aws("s3api", "get-bucket-lifecycle-configuration", "--bucket", bucket, check=False))
@@ -134,24 +134,24 @@ def create_bucket(dry_run: bool = False) -> int:
         return 0
     back = check_bucket(bucket)
     for k, ok in back.items():
-        print(f"readback {k}: {'OK' if ok else 'NG'}")
+        print(f"読み戻し {k}: {'OK' if ok else 'NG'}")
     if not all(back.values()):
-        print("error: bucket settings did not read back as expected", file=sys.stderr)
+        print("エラー: バケットの設定を読み戻したら、期待どおりになっていない", file=sys.stderr)
         return 1
-    print(f"ok: bucket {bucket} is private, encrypted, and deletes objects after 1 day")
+    print(f"OK: バケット {bucket} は非公開・暗号化済みで、置いたものは1日で消える")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Stage a local file on private S3 and print a 1-hour presigned URL.")
-    ap.add_argument("file", nargs="?", help="local file to upload")
+    ap = argparse.ArgumentParser(description="ローカルのファイルを非公開の S3 に置き、1時間有効な署名付き URL を作る。")
+    ap.add_argument("file", nargs="?", help="アップロードするローカルのファイル")
     ap.add_argument("--create-bucket", action="store_true",
-                    help="create the bucket (if missing) with public access block, SSE-S3 and 1-day lifecycle")
-    ap.add_argument("--check", action="store_true", help="read back the bucket hardening settings")
-    ap.add_argument("--dry-run", action="store_true", help="with --create-bucket: print the steps only")
+                    help="バケットを作る（無ければ）。公開アクセスのブロック・SSE-S3・1日で削除のルールを付ける")
+    ap.add_argument("--check", action="store_true", help="バケットの守りの設定を読み戻す")
+    ap.add_argument("--dry-run", action="store_true", help="--create-bucket と併用: 手順を表示するだけ")
     ap.add_argument("--expires-in", type=int, default=PRESIGN_S)
     ap.add_argument("--show-url", action="store_true",
-                    help="print the presigned URL (it grants access to the file for an hour; hidden by default)")
+                    help="署名付き URL を表示する（1時間はファイルを誰でも取れる URL なので、既定では伏せる）")
     a = ap.parse_args(argv)
     try:
         if a.create_bucket:
@@ -162,12 +162,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{k}: {'OK' if ok else 'NG'}")
             return 0 if all(back.values()) else 1
         if not a.file:
-            ap.error("give a file, or --create-bucket / --check")
+            ap.error("ファイルを渡すか、--create-bucket / --check を付けてください")
         url, loc = stage_with_location(a.file, a.expires_in)
-        print(url if a.show_url else f"uploaded: {loc} (presigned URL hidden; use --show-url to print it)")
+        print(url if a.show_url else f"アップロードした: {loc}（署名付き URL は伏せた。表示するには --show-url）")
         return 0
     except RuntimeError as e:
-        print(f"error: {redact(e)}", file=sys.stderr)
+        print(f"エラー: {redact(e)}", file=sys.stderr)
         return 1
 
 

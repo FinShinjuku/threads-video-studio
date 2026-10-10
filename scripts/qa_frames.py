@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""QA contact sheets and numeric checks for clips and the final video (local ffmpeg only, no API).
+"""クリップと完成動画の確認用コンタクトシートと数値チェック（ローカルの ffmpeg だけ。API は使わない）。
 
-  python3 qa_frames.py --project t004-camp --cut c01     # clips/c01.mp4 at 4 fps, 8 columns
-  python3 qa_frames.py --project t004-camp --all         # every clip + seam differences between cuts
-  python3 qa_frames.py --project t004-camp --final       # final/*.mp4 at 2 fps
+  python3 qa_frames.py --project t004-camp --cut c01     # clips/c01.mp4 を 4 fps、8 列で
+  python3 qa_frames.py --project t004-camp --all         # 全クリップ + カット間のつなぎ目の差
+  python3 qa_frames.py --project t004-camp --final       # final/*.mp4 を 2 fps で
 
-Checks
-  freeze  : ffmpeg freezedetect (n=0.003, d=0.4) - a frozen picture longer than 0.4 s looks dead
-  motion  : mean absolute difference between consecutive sampled frames (0-1; ~0 = static)
-  seams   : mean absolute difference between the last frame of a clip and the first frame of the next
-            (0-1). Hard cuts are normally large; for continuous shots a large value means a visible jump.
-Writes qa/<name>-sheet.jpg and merges results into qa/qa.json. Prints a summary.
+チェック
+  freeze  : ffmpeg の freezedetect（n=0.003, d=0.4）。0.4秒より長く止まった絵は死んで見える
+  motion  : 続けて抜き出したコマ同士の平均絶対差（0-1。ほぼ 0 = 動きなし）
+  seams   : あるクリップの最後のコマと次のクリップの最初のコマの平均絶対差（0-1）。
+            普通のカット切り替えなら大きいのが普通。続きのショットで大きいと、跳びが目に見える。
+qa/<name>-sheet.jpg を書き、結果を qa/qa.json にまとめる。要約を表示する。
 """
 
 from __future__ import annotations
@@ -31,10 +31,10 @@ SEAM_JUMP = 0.25
 COLS = 8
 
 
-# --- parsing / math (unit-tested) -----------------------------------------------------------
+# --- 解析と計算（単体テストあり） -----------------------------------------------------------
 
 def parse_freezedetect(log: str, clip_duration: float | None = None) -> list[dict]:
-    """Freeze spans from ffmpeg freezedetect log lines. An unterminated span runs to the clip end."""
+    """ffmpeg freezedetect のログ行から静止区間を取り出す。終わりの無い区間はクリップの最後までとする。"""
     spans: list[dict] = []
     cur: dict | None = None
     for m in re.finditer(r"lavfi\.freezedetect\.freeze_(start|duration|end):\s*([0-9.]+)", log):
@@ -57,9 +57,9 @@ def parse_freezedetect(log: str, clip_duration: float | None = None) -> list[dic
 
 
 def read_ppm(data: bytes) -> tuple[int, int, bytes]:
-    """Parse a binary PPM (P6, maxval 255). Returns (width, height, rgb bytes)."""
+    """バイナリ PPM（P6、maxval 255）を読む。(幅, 高さ, RGB のバイト列) を返す。"""
     if not data.startswith(b"P6"):
-        raise ValueError("not a P6 PPM")
+        raise ValueError("P6 形式の PPM ではない")
     fields, pos = [], 2
     while len(fields) < 3:
         while data[pos:pos + 1].isspace():
@@ -71,20 +71,20 @@ def read_ppm(data: bytes) -> tuple[int, int, bytes]:
         while not data[pos:pos + 1].isspace():
             pos += 1
         fields.append(int(data[start:pos]))
-    pos += 1  # single whitespace after maxval
+    pos += 1  # maxval の後の空白1文字
     w, h, maxval = fields
     if maxval != 255:
-        raise ValueError("only maxval 255 is supported")
+        raise ValueError("maxval は 255 だけに対応")
     pix = data[pos:pos + w * h * 3]
     if len(pix) != w * h * 3:
-        raise ValueError("truncated PPM")
+        raise ValueError("PPM が途中で切れている")
     return w, h, pix
 
 
 def mean_abs_diff(a: bytes, b: bytes) -> float:
-    """Mean absolute byte difference, normalised to 0-1."""
+    """バイトごとの平均絶対差（0-1 に正規化）。"""
     if len(a) != len(b) or not a:
-        raise ValueError("buffers must be the same non-zero size")
+        raise ValueError("2つのバッファは同じ大きさで、空でないこと")
     return sum(abs(x - y) for x, y in zip(a, b)) / (255.0 * len(a))
 
 
@@ -93,7 +93,7 @@ def mean_abs_diff(a: bytes, b: bytes) -> float:
 def _ffmpeg_bytes(*args: str) -> bytes:
     r = subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", *args], capture_output=True)
     if r.returncode != 0:
-        raise RuntimeError(f"ffmpeg failed: {r.stderr.decode(errors='replace').strip()[:300]}")
+        raise RuntimeError(f"ffmpeg が失敗した: {r.stderr.decode(errors='replace').strip()[:300]}")
     return r.stdout
 
 
@@ -110,7 +110,7 @@ def freeze_spans(video: Path, dur: float) -> list[dict]:
                         "-vf", f"freezedetect=n={FREEZE_NOISE}:d={FREEZE_MIN}", "-f", "null", "-"],
                        capture_output=True, text=True)
     if r.returncode != 0:
-        raise RuntimeError(f"freezedetect failed: {r.stderr.strip()[-300:]}")
+        raise RuntimeError(f"freezedetect が失敗した: {r.stderr.strip()[-300:]}")
     return parse_freezedetect(r.stderr, dur)
 
 
@@ -141,7 +141,7 @@ def seam_diff(a: Path, b: Path) -> float:
 # --- main --------------------------------------------------------------------------------------
 
 def clip_path(project: Path, name: str) -> Path:
-    return common.safe_path(project, f"clips/{common.check_id(name, 'clip name')}.mp4", "clip")
+    return common.safe_path(project, f"clips/{common.check_id(name, 'クリップ名')}.mp4", "クリップ")
 
 
 def check_video(video: Path, name: str, qa_dir: Path, fps: float) -> dict:
@@ -154,13 +154,13 @@ def check_video(video: Path, name: str, qa_dir: Path, fps: float) -> dict:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Contact sheets + freeze / motion / seam checks.")
-    ap.add_argument("--project", help="project folder or slug (default: current folder)")
+    ap = argparse.ArgumentParser(description="コンタクトシートを作り、静止・動き・つなぎ目をチェックする。")
+    ap.add_argument("--project", help="プロジェクトのフォルダまたはスラッグ（省略時は今のフォルダ）")
     g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument("--cut", action="append", help="clip name, e.g. c01 or c01-draft (repeatable)")
-    g.add_argument("--all", action="store_true", help="all cuts in shots.json that have clips/<id>.mp4")
-    g.add_argument("--final", action="store_true", help="final/*.mp4")
-    ap.add_argument("--fps", type=float, help="sampling fps (default 4 for clips, 2 for final)")
+    g.add_argument("--cut", action="append", help="クリップ名。例: c01 や c01-draft（複数回指定できる）")
+    g.add_argument("--all", action="store_true", help="shots.json のカットのうち clips/<id>.mp4 があるもの全部")
+    g.add_argument("--final", action="store_true", help="final/*.mp4 を確認する")
+    ap.add_argument("--fps", type=float, help="コマを抜き出す fps（既定はクリップ 4、完成動画 2）")
     a = ap.parse_args()
 
     project = common.project_dir(a.project)
@@ -174,9 +174,9 @@ def main() -> None:
     if a.final:
         fps = a.fps or 2.0
         files = sorted(f for f in common.safe_path(project, "final").glob("*.mp4")
-                       if common.safe_path(project, f, "final file"))
+                       if common.safe_path(project, f, "完成ファイル"))
         if not files:
-            raise FileNotFoundError("no final/*.mp4")
+            raise FileNotFoundError("final/*.mp4 が無い")
         qa.setdefault("final", {})
         for f in files:
             r = check_video(f, f.stem, qa_dir, fps)
@@ -185,16 +185,16 @@ def main() -> None:
     else:
         fps = a.fps or 4.0
         if a.all:
-            names = [common.check_id(c.get("id", ""), "cut id") for c in common.load_shots(project).get("cuts", [])]
+            names = [common.check_id(c.get("id", ""), "カット ID") for c in common.load_shots(project).get("cuts", [])]
             names = [n for n in names if clip_path(project, n).exists()]
             if not names:
-                raise FileNotFoundError("no clips/<cut>.mp4 found")
+                raise FileNotFoundError("clips/<cut>.mp4 が見つからない")
         else:
-            names = [common.check_id(n, "clip name") for n in a.cut]
+            names = [common.check_id(n, "クリップ名") for n in a.cut]
         for n in names:
             f = clip_path(project, n)
             if not f.exists():
-                raise FileNotFoundError(f"clip not found: clips/{n}.mp4")
+                raise FileNotFoundError(f"クリップが無い: clips/{n}.mp4")
             r = check_video(f, n, qa_dir, fps)
             qa["clips"][n] = r
             lines.append(_summary(n, r))
@@ -203,24 +203,24 @@ def main() -> None:
             for x, y in zip(names, names[1:]):
                 d = seam_diff(clip_path(project, x), clip_path(project, y))
                 seams.append({"from": x, "to": y, "diff": d, "jump": d > SEAM_JUMP})
-                lines.append(f"seam {x}->{y}: diff {d:.3f}" + ("  (large: fine for a hard cut, "
-                                                                 "a jump for a continuous shot)" if d > SEAM_JUMP else ""))
+                lines.append(f"つなぎ目 {x}->{y}: 差 {d:.3f}" + ("  （大きい: 普通のカット切り替えなら問題なし、"
+                                                                 "続きのショットなら跳んで見える）" if d > SEAM_JUMP else ""))
             qa["seams"] = seams
 
     qa["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     common.save_json(qa_path, qa)
     for ln in lines:
         print(ln)
-    print(f"written: {qa_path.relative_to(project)}")
+    print(f"書き出した: {qa_path.relative_to(project)}")
 
 
 def _summary(name: str, r: dict) -> str:
-    s = f"{name}: {r['duration']:.2f}s motion {r['motion'] if r['motion'] is not None else 'n/a'}"
+    s = f"{name}: {r['duration']:.2f}秒 動き {r['motion'] if r['motion'] is not None else '測定不可'}"
     if r["freeze_spans"]:
         spans = ", ".join(f"{x['start']:.2f}-{x['end']:.2f}s" if x["end"] is not None else f"{x['start']:.2f}s-"
                           for x in r["freeze_spans"])
-        s += f"  FREEZE {spans}"
-    return s + f"  sheet {Path(r['sheet']).name}"
+        s += f"  静止 {spans}"
+    return s + f"  シート {Path(r['sheet']).name}"
 
 
 if __name__ == "__main__":

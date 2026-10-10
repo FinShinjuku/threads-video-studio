@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Show or change threads-video-studio settings from the shell.
+"""threads-video-studio の設定をシェルから確認・変更する。
 
-  python3 setup.py status            # what is set (secrets masked) and where it comes from
-  python3 setup.py set <key>         # prompt for a value without echoing it, save to the config file
-  python3 setup.py import <file>     # merge a JSON file made with setup.html, then delete it if --delete
-  python3 setup.py path              # print the config file path
+  python3 setup.py status            # 何が設定済みか（秘密値は伏せる）
+  python3 setup.py set <key>         # 値を画面に出さずに入力し、設定ファイルに保存する
+  python3 setup.py import <file>     # setup.html で作った JSON を取り込む（--delete で取込後に削除）
+  python3 setup.py path              # 設定ファイルのパスを表示する
 
-Values are saved to ~/.config/threads-video-studio/config.json (mode 0600), or to the folder in
-TVS_CONFIG_DIR. In Claude Code you can instead enter them in the plugin configuration screen and
-run the `studio_save_settings` tool once.
+値は ~/.config/threads-video-studio/config.json（権限 0600）か、TVS_CONFIG_DIR のフォルダに保存する。
+Claude Code ではプラグインの設定画面で入力し、`studio_save_settings` ツールを1回実行してもよい。
 """
 
 from __future__ import annotations
@@ -25,16 +24,16 @@ import common  # noqa: E402
 
 
 def cmd_status() -> None:
-    print(f"config file: {common.CONFIG_FILE} ({'exists' if common.CONFIG_FILE.exists() else 'not created'})")
+    print(f"設定ファイル: {common.CONFIG_FILE}（{'あり' if common.CONFIG_FILE.exists() else '未作成'}）")
     for key, (envs, secret, desc) in common.SETTINGS.items():
         v = common.get(key)
-        shown = common.mask(v) if secret else (v or "(empty)")
+        shown = common.mask(v) if secret else (v or "(未設定)")
         print(f"  {key:22} {shown:28} {desc}")
 
 
 def cmd_set(key: str) -> None:
     if key not in common.SETTINGS:
-        sys.exit(f"unknown key '{key}'. Known: {', '.join(common.SETTINGS)}")
+        sys.exit(f"不明なキー '{key}'。使えるキー: {', '.join(common.SETTINGS)}")
     secret = common.SETTINGS[key][1]
     v = (getpass.getpass(f"{key}: ") if secret else input(f"{key}: ")).strip()
     data = common.load_file()
@@ -43,7 +42,7 @@ def cmd_set(key: str) -> None:
     else:
         data.pop(key, None)
     common.save_file(data)
-    print(f"saved {key}: {common.mask(v) if secret else (v or '(removed)')}")
+    print(f"保存した {key}: {common.mask(v) if secret else (v or '(削除)')}")
 
 
 def cmd_import(path: str, delete: bool) -> None:
@@ -53,11 +52,11 @@ def cmd_import(path: str, delete: bool) -> None:
     data = common.load_file()
     data.update({k: str(v).strip() for k, v in incoming.items() if k in common.SETTINGS and str(v).strip()})
     common.save_file(data)
-    print(f"imported {len(incoming) - len(unknown)} key(s) into {common.CONFIG_FILE}"
-          + (f"; ignored unknown: {', '.join(unknown)}" if unknown else ""))
+    print(f"{len(incoming) - len(unknown)} 件のキーを {common.CONFIG_FILE} に取り込んだ"
+          + (f"。不明なキーは無視した: {', '.join(unknown)}" if unknown else ""))
     if delete:
         p.unlink()
-        print(f"deleted {p}")
+        print(f"削除した: {p}")
 
 
 def main() -> None:

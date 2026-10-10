@@ -1,6 +1,6 @@
 ---
 name: finish
-description: "生成したカット・ナレ・BGM から完成動画を組み立てる。シリーズで使い回す決まった BGM（シグネチャー曲）、ナレ中の音量下げ、丸ゴシックの字幕、最後の CTA ボタンを HyperFrames で組み、0.5秒ごとの全コマで最終確認し、投稿用に圧縮する。Use when assembling the final video, adding captions/BGM/call-to-action, rendering, or doing the final QA (\"仕上げ\" \"字幕\" \"BGM\" \"書き出し\" \"完成させて\" \"render\")."
+description: "生成したカット・ナレ・BGM から完成動画を組み立てる。シリーズで使い回す決まった BGM（シグネチャー曲）、ナレ中の音量下げ、丸ゴシックの字幕、最後の CTA ボタンを HyperFrames で組み、0.5秒ごとの全コマで最終確認し、投稿用に圧縮する。使う場面：完成動画を組み立てるとき、字幕・BGM・誘導ボタンを入れるとき、書き出すとき、最終確認をするとき（「仕上げ」「字幕」「BGM」「書き出し」「完成させて」）。"
 ---
 
 # finish — BGM・字幕・CTA・書き出し・最終確認
@@ -20,7 +20,7 @@ description: "生成したカット・ナレ・BGM から完成動画を組み�
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/assemble.py --project <dir> --render
 ```
-- カットは `shots.json` の `start`・`dur` で並ぶ。素材が足りないと、最後のコマで止めて埋め、**0.4秒を超えると WARN** が出る。その場合は、尺を詰めるか、カットを長めに作り直す。
+- カットは `shots.json` の `start`・`dur` で並ぶ。素材が足りないと、最後のコマで止めて埋め、**0.4秒を超えると「警告」** が出る。その場合は、尺を詰めるか、カットを長めに作り直す。
 - 字幕は `caption`（無ければ `line` を自動で分割）。丸ゴシックの白文字に柔らかい縁。強調は `[[ ]]` の1語だけ黄色。上下15%と右端を避ける。
 - 最後のカットに CTA ボタン（`shots.json` の `cta`）。社名・ロゴは入れない。
 - BGM はナレの間だけ -20dB 下げ、冒頭はフェードイン、最後はフェードアウトする。

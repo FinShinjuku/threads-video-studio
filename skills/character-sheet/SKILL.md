@@ -1,6 +1,6 @@
 ---
 name: character-sheet
-description: "キャラクターの見た目をカット間でそろえるための設定シート作りと、動画の起点画像（最初のコマ）の清書・手直し。ラフを参照に高解像度で描き直し、吹き出し・文字・崩れやすい小物を消す。Use when creating a character reference sheet, keeping a character consistent across cuts, making clean start frames from rough storyboards, or removing text/bubbles/props from a frame (\"キャラ設定\" \"見た目をそろえる\" \"起点画像\" \"吹き出しを消して\" \"character sheet\")."
+description: "キャラクターの見た目をカット間でそろえるための設定シート作りと、動画の起点画像（最初のコマ）の清書・手直し。ラフを参照に高解像度で描き直し、吹き出し・文字・崩れやすい小物を消す。使う場面：キャラ設定シートを作るとき、カット間でキャラの見た目をそろえたいとき、ラフから起点画像を清書するとき、絵から文字・吹き出し・小物を消したいとき（「キャラ設定」「見た目をそろえる」「起点画像」「吹き出しを消して」）。"
 ---
 
 # character-sheet — 見た目をそろえる・起点画像を清書する

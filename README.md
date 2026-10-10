@@ -1,60 +1,45 @@
 # threads-video-studio
 
-A Claude plugin (Claude Code and Claude Cowork) for making short vertical AI videos for Threads —
-anime/illustration style, Japanese narration, captions, BGM and a call-to-action — and for scheduling,
-auto-posting and reviewing them.
+Threads 向けの縦型 AI 動画（アニメ調・日本語ナレーション・字幕・BGM・誘導ボタン）を作り、予約投稿して振り返るための Claude プラグインです。Claude Code と Claude Cowork の両方で使えます。
 
-Threads 向けの縦型 AI 動画（アニメ調・日本語ナレ・字幕・BGM・誘導ボタン）を作り、予約投稿して振り返るための Claude プラグインです。
-
-## What it does
+## できること
 
 ```
-plan → storyboard → [approve] → narration → character sheet & start frames
-     → draft cuts → frame-level QA → final cuts → captions, BGM, CTA → [approve]
-     → [approve post] → scheduled auto-post → 48h / 7d review → next plan
+企画 → 絵コンテ →【承認①】→ ナレーション → キャラ設定シート・起点画像
+ → 下書き生成 → 全コマ確認 → 本番生成 → 字幕・BGM・誘導ボタン →【承認②】
+ →【投稿の承認③】→ 予約時刻に自動投稿 → 48時間・7日の振り返り → 次の企画
 ```
 
-- **Three human gates.** Nothing that costs money is generated before the storyboard is approved,
-  and nothing is posted before the post itself is approved.
-- **Short by design.** Story videos 10–15 s (about 3 cuts), introductions 20–30 s. One action and one
-  camera move per cut, one or two characters, simple props.
-- **Consistent characters.** A character sheet is made once and used as the reference for every frame.
-- **One-pass narration.** The whole script is generated in a single ElevenLabs v3 request so the voice
-  stays the same; readings are checked before generation; cut timing comes from per-character timestamps.
-- **Cheap drafts, then finals.** Each model's allowed durations, resolutions and price are validated
-  before submitting; `--dry-run` prints the estimate. Interrupted generations resume from a saved request id.
-- **QA you can trust.** Every cut is reviewed as a 0.25-second contact sheet, plus automatic detection of
-  frozen frames and harsh seams.
-- **Auto-posting.** Approved posts are published at their scheduled time; local videos are handed to the
-  Threads API through a private S3 bucket and a 1-hour signed URL.
+- **人が決めるのは3か所だけ。** 絵コンテを承認するまでは、お金のかかる生成をしません。投稿の一式を承認するまでは、投稿しません。
+- **短く作る。** 物語系は10〜15秒（3カット前後）、紹介系は20〜30秒。1カットに動作1つ・カメラの動き1つ、登場人物は1〜2人、小物は形の単純なものにします。
+- **キャラの見た目をそろえる。** キャラ設定シートを1回作り、すべての絵の見本に使います。
+- **ナレーションは1回で通して作る。** 原稿全体を ElevenLabs v3 で1回で生成するので、声色がそろいます。読みは生成前に確認し、カットの尺は文字ごとの時刻から決めます。
+- **安い下書きから本番へ。** モデルごとに許される秒数・解像度・料金を送信前に確かめ、`--dry-run` で見積もりを出します。生成が途中で止まっても、保存した受付番号から続きを受け取ります。
+- **崩れを見落とさない。** すべてのカットを0.25秒ごとのコマ一覧で確認し、止まって見える区間やつなぎ目の乱れも自動で見つけます。
+- **自動投稿。** 承認した投稿を予約時刻に公開します。手元の動画は、非公開の S3 に置いて1時間だけ有効な URL で Threads に渡します。
 
-## Install
+## インストール
+
+**Claude Cowork／Claude デスクトップ（おすすめ）**
+1. [最新のリリース](https://github.com/FinShinjuku/threads-video-studio/releases/latest) から `threads-video-studio.mcpb` をダウンロードして、ダブルクリックします（または、カスタマイズ → コネクタ → 追加 → 拡張機能をインストール）。
+   設定画面が開くので、fal.ai と ElevenLabs のキーを入れます。投稿もするなら、投稿用の設定も入れます。入れたら有効にします。
+   キーは拡張の中だけで使われ、あなたの PC から API を呼びます。
+2. 手順（スキル）を入れます：カスタマイズ → プラグイン → 追加 → マーケットプレイスを追加 → `FinShinjuku/threads-video-studio` を入れてインストールします。
+3. 任意：作業フォルダ（初期値 `~/threads-videos`）を Cowork に接続すると、できた動画を Cowork から見られます。
 
 **Claude Code**
 ```
 /plugin marketplace add FinShinjuku/threads-video-studio
 /plugin install threads-video-studio@threads-video-studio
 ```
-A settings dialog opens for the API keys (secret fields are masked). Change them later with
-`/plugin configure threads-video-studio@threads-video-studio`, then ask Claude to run `studio_save_settings` once.
+API キーの入力画面が開きます（秘密の項目は伏せ字）。あとから変えるときは `/plugin configure threads-video-studio@threads-video-studio` を実行し、そのあと Claude に `studio_save_settings` を1回実行してもらいます。
 
-**Claude Cowork / Claude Desktop (recommended)**
-1. Download `threads-video-studio.mcpb` from the [latest release](https://github.com/FinShinjuku/threads-video-studio/releases/latest)
-   and double-click it (or Customize → Connectors → Add → Install extension). A settings form opens:
-   enter your fal.ai and ElevenLabs keys (and the posting settings if you post), then enable it.
-   The keys stay inside the extension, which calls the APIs from your computer.
-2. Add the skills: Customize → Plugins → Add → Add marketplace → `FinShinjuku/threads-video-studio`, then install.
-3. Optional: connect your workspace folder (default `~/threads-videos`) to Cowork to browse the videos.
+インストールの前に、下の「必要なもの」を入れておいてください。
+拡張を使わない場合は、`setup/setup.html` をブラウザで開いて `config.json` を保存し、Cowork に接続したフォルダに `tvs-config.json` という名前で置く方法もあります。ただし、このファイルにはキーがそのまま入るので、拡張を使う方が安全です。
 
-Before installing, set up the tools listed under Requirements below.
-Without the extension, you can instead open `setup/setup.html`, save `config.json` and place it as
-`tvs-config.json` in the folder connected to Cowork. That file holds your keys in plain text, so the
-extension is the safer choice.
-
-## 必要なもの（ご自身で入れてください） / Requirements
+## 必要なもの（ご自身で入れてください）
 
 このプラグインは、下の道具を自動では入れません。使う前に、ご自身の Mac に入れてください。
-The plugin does not install these for you. Install them on your Mac before first use.
 
 | 道具 | 用途 | 入れ方（Homebrew） | 必須 |
 |---|---|---|---|
@@ -64,50 +49,60 @@ The plugin does not install these for you. Install them on your Mac before first
 | pyopenjtalk | ナレーションの読みの事前チェック（無くても簡易チェックで動く） | `python3 -m pip install pyopenjtalk` | 任意 |
 | AWS CLI | 動画を自動投稿するときの受け渡し（S3） | `brew install awscli` → `aws configure` | 自動投稿するなら |
 
-Homebrew が無い場合は https://brew.sh の手順で先に入れてください。
-入ったかどうかは、Claude に「studio_status を見て」と頼むか、`python3 scripts/setup.py status` で確認できます。
+Homebrew が無い場合は、先に https://brew.sh の手順で入れてください。
+入ったかどうかは、Claude に「studio_status を見て」と頼むか、`python3 scripts/setup.py status` で確かめられます。
 
-Accounts: fal.ai and ElevenLabs (required); Threads API and AWS (for posting). See [CONNECTORS.md](CONNECTORS.md).
-- macOS is the tested platform. Scheduling uses launchd on macOS or a Cowork scheduled task.
+使うサービスのアカウント：fal.ai と ElevenLabs（必須）、Threads API と AWS（投稿するなら）。詳しくは [CONNECTORS.md](CONNECTORS.md) を見てください。
+動作を確かめているのは macOS です。定期実行は、macOS の launchd か Cowork のスケジュールタスクを使います。
 
-## Skills
+## スキル（Claude への手順書）
 
-| Skill | When Claude uses it |
+| スキル | Claude が使う場面 |
 |---|---|
-| `video-studio` | Entry point: decides which step you are at and follows the flow |
-| `storyboard` | Plan, cut list, prompt self-check, approval packet |
-| `character-sheet` | Character reference sheet, clean start frames, removing text/props |
-| `generate-cuts` | Model choice, draft → final, QA, fixing broken cuts |
-| `narration` | Reading check, one-pass narration, timing |
-| `finish` | Signature BGM, captions, CTA, render, final QA |
-| `threads-post` | Draft, approve, schedule, auto-publish, review |
-| `studio-setup` | Keys, tools and connectors |
+| `video-studio` | 入口。依頼がどの段階かを判断して、流れに沿って進める |
+| `storyboard` | 企画、カット表、プロンプトの自己採点、承認に出す資料 |
+| `character-sheet` | キャラ設定シート、起点画像の清書、文字や小物を消す |
+| `generate-cuts` | モデルの選び方、下書きから本番、確認、崩れたカットの直し方 |
+| `narration` | 読みの事前チェック、ナレーションの通し生成、尺の確定 |
+| `finish` | 使い回す BGM、字幕、誘導ボタン、書き出し、最終確認 |
+| `threads-post` | 下書き、承認、予約、自動投稿、振り返り |
+| `studio-setup` | キー・道具・接続の準備 |
 
-## Settings
+## 拡張のツール（Cowork／デスクトップ）
 
-| Key | Purpose |
+拡張を入れると、Claude は次のツールを使えます。どれもあなたの PC の上で動き、作品は作品名（例：`t004-camp`）で指定します。
+
+| ツール | 内容 |
 |---|---|
-| `fal_key` | fal.ai (images, video, music) |
-| `elevenlabs_api_key`, `narrator_voice_id` | Narration and music |
-| `threads_access_token`, `threads_user_id` | Posting and insights |
-| `cta_url` | Link added to each post (a `?t=<slug>` tag is appended) |
-| `media_bucket`, `aws_profile`, `aws_region` | Private S3 bucket for handing videos to Threads |
-| `workspace` | Where projects, the posting queue and reports live (default `~/threads-videos`) |
+| `studio_status`・`studio_paths`・`studio_save_settings` | 設定と道具の確認、保存先の確認、設定の保存 |
+| `studio_new_project`・`studio_list_projects` | 作品フォルダの作成と一覧 |
+| `studio_read_shots`・`studio_write_shots`・`studio_write_text` | カット表・企画書・ナレ原稿・読み替え辞書・投稿本文の読み書き |
+| `studio_gen_image`・`studio_gen_video`・`studio_gen_voice`・`studio_gen_bgm` | 画像・動画・ナレーション・BGM の生成（有料。見積もりのみも可） |
+| `studio_yomi_check`・`studio_qa` | 読みの事前チェック、コマの確認 |
+| `studio_assemble` | 字幕・BGM・誘導ボタンを入れて書き出す |
+| `studio_post`・`studio_insights` | 投稿の下書き・承認・予約・公開、反応の取り込みと振り返り |
+| `studio_job` | 時間のかかる処理の進み具合 |
 
-Resolution order: plugin settings → environment variables → `tvs-config.json` in the current or workspace
-folder → `~/.config/threads-video-studio/config.json` (mode 0600). Secrets are never printed.
+## 設定
 
-## Privacy and safety
+| 設定 | 用途 |
+|---|---|
+| `fal_key` | fal.ai（画像・動画・BGM） |
+| `elevenlabs_api_key`、`narrator_voice_id` | ナレーションと BGM |
+| `threads_access_token`、`threads_user_id` | 投稿と反応の取り込み |
+| `cta_url` | 投稿本文に入れるリンク（`?t=<作品名>` が付く） |
+| `media_bucket`、`aws_profile`、`aws_region` | 動画を Threads に渡すための非公開の S3 バケット |
+| `workspace` | 作品・投稿の予定表・レポートを置く場所（初期値 `~/threads-videos`） |
 
-- Keys stay on your machine. `setup/setup.html` runs offline and sends nothing.
-- Posting is irreversible on Threads, so the scripts only publish items that a person approved
-  (`approved_by` is required), never retry an item left mid-publish, and never auto-approve.
-- `threads_post.py approve --by <name> --note "<the human's OK, quoted>"` is an operating rule, not a
-  technical check: Claude runs it only after a person has explicitly said OK in the chat, having seen the
-  final video, text and time. The script cannot tell who is typing; the note is kept in `posts.json` for audit.
-  Any later change to the text, topic, time or video (SHA-256) cancels the approval.
-- Do not use real people's faces or names, third-party screens or logos without permission.
+設定を読む順番：拡張・プラグインの設定画面 → 環境変数 → 今いるフォルダか作業フォルダの `tvs-config.json` → `~/.config/threads-video-studio/config.json`（本人だけが読める権限）。秘密の値は画面に出しません。
 
-## License
+## プライバシーと安全
 
-MIT. Captions use Zen Maru Gothic (SIL Open Font License 1.1).
+- キーはあなたの PC から出ません。`setup/setup.html` はネットにつながずに動き、何も送信しません。
+- Threads の投稿は取り消せません。そのため、スクリプトは人が承認したもの（`approved_by` が必須）だけを公開します。公開の途中で止まったものを自動でやり直したり、自分で承認したりはしません。
+- `threads_post.py approve --by <名前> --note "<人の OK の言葉>"` は運用ルールで、技術的な判定ではありません。Claude は、人が完成動画・本文・時刻を見てチャットで明示的に OK と言ったあとにだけ実行します。スクリプトは誰が入力したかを判定できないので、その言葉を `posts.json` に記録して残します。承認のあとに本文・トピック・時刻・動画（SHA-256）のどれかが変わると、承認は取り消されます。
+- 実在の人の顔や名前、他社の画面やロゴを、許可なく使わないでください。
+
+## ライセンス
+
+MIT。字幕のフォントは Zen Maru Gothic（SIL Open Font License 1.1）です。

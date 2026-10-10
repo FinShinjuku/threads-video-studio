@@ -1,6 +1,6 @@
 ---
 name: video-studio
-description: "Threads 向け縦型 AI 動画づくりの入口（オーケストレータ）。企画→絵コンテ→承認→ナレ→キャラ設定シート→起点画像→下書き生成→QA→本番生成→仕上げ→承認→予約投稿→振り返りを、どの段階かを判定して該当スキルへ振り分ける。Use when the user asks to make, plan, fix or post a short vertical AI video for Threads/Reels/TikTok (\"動画を作って\" \"Threads用の動画\" \"ショート動画\" \"絵コンテ\" \"このカットを直して\" \"投稿して\" \"make a short video\")."
+description: "Threads 向け縦型 AI 動画づくりの入口（オーケストレータ）。企画→絵コンテ→承認→ナレ→キャラ設定シート→起点画像→下書き生成→QA→本番生成→仕上げ→承認→予約投稿→振り返りを、どの段階かを判定して該当スキルへ振り分ける。使う場面：Threads・Reels・TikTok 向けの短い縦型 AI 動画を作る・企画する・直す・投稿するとき（「動画を作って」「Threads用の動画」「ショート動画」「絵コンテ」「このカットを直して」「投稿して」）。"
 ---
 
 # video-studio — Threads 動画づくりの入口

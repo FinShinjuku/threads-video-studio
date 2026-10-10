@@ -1,6 +1,6 @@
-"""Offline unit tests for threads-video-studio scripts (no network, no ffmpeg needed).
+"""threads-video-studio のスクリプトのオフライン単体テスト（通信も ffmpeg も不要）。
 
-Run: python3 -m unittest discover -s scripts/tests
+実行: python3 -m unittest discover -s scripts/tests
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-os.environ.setdefault("TVS_CONFIG_DIR", tempfile.mkdtemp())  # never touch the real config
+os.environ.setdefault("TVS_CONFIG_DIR", tempfile.mkdtemp())  # 本物の設定には触れない
 
 import common  # noqa: E402
 import gen_image  # noqa: E402
@@ -53,10 +53,10 @@ class TestVideoRegistry(unittest.TestCase):
     def test_resolution_rejected_with_allowed(self):
         with self.assertRaises(ValueError) as cm:
             gen_video.check_resolution("veo31-fast", "480p")
-        self.assertIn("Allowed: 720p, 1080p, 4k", str(cm.exception))
+        self.assertIn("使える値: 720p, 1080p, 4k", str(cm.exception))
         with self.assertRaises(ValueError) as cm:
             gen_video.check_resolution("seedance20-fast", "1080p")
-        self.assertIn("Allowed:", str(cm.exception))
+        self.assertIn("使える値:", str(cm.exception))
         with self.assertRaises(ValueError):
             gen_video.check_resolution("kling30", "720p")
         self.assertIsNone(gen_video.check_resolution("kling30", None))
@@ -73,7 +73,7 @@ class TestVideoRegistry(unittest.TestCase):
         self.assertEqual(r("kling30", 2.4), 3)
         with self.assertRaises(ValueError) as cm:
             r("veo31-fast", 8.2)
-        self.assertIn("Allowed: 4, 6, 8", str(cm.exception))
+        self.assertIn("使える値: 4, 6, 8", str(cm.exception))
         with self.assertRaises(ValueError):
             r("seedance20", 15.5)
 
@@ -100,7 +100,7 @@ class TestVideoRegistry(unittest.TestCase):
         self.assertIn("start_image_url", b)
         with self.assertRaises(ValueError):
             gen_video.build_body("veo31-fast-flf", cut, p, "walk", 6, "720p", images=False)
-        with self.assertRaises(ValueError):  # veo31-fast takes no end frame
+        with self.assertRaises(ValueError):  # veo31-fast は終了フレームを使えない
             gen_video.build_body("veo31-fast", dict(cut, end_frame="frames/e.png"), p, "x", 6, "720p", images=False)
         b = gen_video.build_body("seedance20-ref", dict(cut, refs=["a.png", "b.png"]), p, "x", 4, "480p", images=False)
         self.assertEqual(len(b["image_urls"]), 2)
@@ -167,7 +167,7 @@ class TestVoice(unittest.TestCase):
 
     def test_spans_fallback_on_normalised_text(self):
         text = gen_voice.build_text(self.LINES, None)
-        al = fake_alignment(text.replace("40", "４０"))  # service normalised the digits
+        al = fake_alignment(text.replace("40", "４０"))  # サービス側で数字が正規化された場合
         spans = gen_voice.line_spans(al, self.LINES, None)
         self.assertEqual(len(spans), 3)
         self.assertEqual(spans[0][0], 0.0)
@@ -255,7 +255,7 @@ class TestMisc(unittest.TestCase):
 
 
 class TestRunJobOffline(unittest.TestCase):
-    """run_job with the network mocked: resume from .task, and 403 'locked' handling."""
+    """通信をモックした run_job: .task からの再開と、403 'locked' の扱い。"""
 
     def setUp(self):
         self.d = tempfile.TemporaryDirectory()
@@ -281,10 +281,10 @@ class TestRunJobOffline(unittest.TestCase):
         def fake(method, url, headers, body=None, **kw):
             calls.append((method, url))
             if method == "POST":
-                raise AssertionError("must not resubmit")
+                raise AssertionError("再送信してはいけない")
             if url.endswith("/status"):
                 if sum(1 for c in calls if c[1].endswith("/status")) == 1:
-                    raise common.NetworkError("network error")  # survives a flaky poll
+                    raise common.NetworkError("通信エラー")  # 不安定な状態確認でも止まらない
                 return {"status": "COMPLETED"}
             return {"video": {"url": "https://x/v.mp4"}, "seed": 7}
 
@@ -306,7 +306,7 @@ class TestRunJobOffline(unittest.TestCase):
         common.http_json = fake
         with self.assertRaises(RuntimeError) as cm:
             gen_video.run_job(self.job(), timeout=60)
-        self.assertIn("Top up", str(cm.exception))
+        self.assertIn("残高を追加", str(cm.exception))
         self.assertTrue((self.proj / "clips" / "c01.task.locked").exists())
         self.assertFalse((self.proj / "clips" / "c01.task").exists())
 
@@ -327,7 +327,7 @@ class TestReviewFixes(unittest.TestCase):
             p.write_text(json.dumps({"request_id": "x/../y"}))
             with self.assertRaises(RuntimeError):
                 gen_video.read_task(p)
-            p.write_text("12345")  # bare number in JSON is still treated as an id string
+            p.write_text("12345")  # JSON として数値だけでも、id の文字列として扱う
             self.assertEqual(gen_video.read_task(p)["request_id"], "12345")
 
     def test_resume_ignores_saved_urls(self):
@@ -385,8 +385,8 @@ class TestReviewFixes(unittest.TestCase):
     def test_deprecation(self):
         self.assertEqual(gen_video.MODELS["veo31-fast"]["deprecated"], "2026-10-22")
         self.assertEqual(gen_video.MODELS["veo31-fast-flf"]["deprecated"], "2026-10-22")
-        self.assertIn("will be deprecated", gen_video.deprecation_warning("veo31-fast", "2026-10-10"))
-        self.assertIn("was deprecated", gen_video.deprecation_warning("veo31-fast-flf", "2026-10-23"))
+        self.assertIn("廃止予定", gen_video.deprecation_warning("veo31-fast", "2026-10-10"))
+        self.assertIn("廃止済み", gen_video.deprecation_warning("veo31-fast-flf", "2026-10-23"))
         self.assertIsNone(gen_video.deprecation_warning("seedance20"))
         self.assertEqual(gen_video.MODELS["kling30"]["durations"], list(range(3, 16)))
         self.assertIsNone(gen_video.MODELS["kling30"]["aspect_ratio"])
@@ -412,8 +412,8 @@ class TestReviewFixes(unittest.TestCase):
             self.assertAlmostEqual(total, 2 * 0.43 + 1.214, places=2)
 
     def test_mask_and_settings(self):
-        self.assertEqual(common.mask("abcdef"), "set")
-        self.assertEqual(common.mask(""), "(empty)")
+        self.assertEqual(common.mask("abcdef"), "設定済み")
+        self.assertEqual(common.mask(""), "(未設定)")
         self.assertNotIn("byteplus_api_key", common.SETTINGS)
 
     def test_local_config_permissions(self):

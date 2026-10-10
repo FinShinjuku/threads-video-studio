@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Create a project skeleton for one video.
+"""動画1本分のプロジェクトのひな形を作る。
 
   python3 new_project.py t004-camp --type story
   python3 new_project.py t005-intro --type intro --cuts 6 --workspace ~/threads-videos
 
-Creates <workspace>/<slug>/ with brief.md, shots.json and the standard sub-folders (see SPEC.md).
-Safe to re-run: existing files are never overwritten, missing folders are added.
+<workspace>/<slug>/ に brief.md・shots.json・標準のサブフォルダを作る（SPEC.md 参照）。
+何度実行してもよい。既存のファイルは上書きせず、足りないフォルダだけ足す。
 """
 
 from __future__ import annotations
@@ -17,20 +17,20 @@ import common
 
 SUBDIRS = ["storyboard", "character/refs", "frames", "clips", "voice", "bgm/candidates", "qa", "video", "final"]
 TYPES = {
-    # type -> (default cut count, default seconds per cut, target length)
+    # 種類 -> (既定のカット数, 1カットの既定秒数, 目標の尺)
     "story": (3, 4.0, "10-15s"),
     "intro": (5, 5.0, "20-30s"),
 }
 
 BRIEF = """# {slug}
 
-- type: {type} (target {target})
-- audience:
-- thesis (one sentence):
-- feeling after watching:
-- call to action:
+- 種類: {type}（目標 {target}）
+- 見てほしい人:
+- 伝えたいこと（1文）:
+- 見終わったあとの気持ち:
+- 誘導先（CTA）:
 
-## Notes
+## メモ
 """
 
 
@@ -62,24 +62,24 @@ def make_shots(slug: str, vtype: str, n: int, sec: float) -> dict:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Create a video project folder (brief.md, shots.json, sub-folders).")
-    ap.add_argument("slug", help="folder name, e.g. t004-camp (letters, digits, - and _)")
+    ap = argparse.ArgumentParser(description="動画プロジェクトのフォルダを作る（brief.md・shots.json・サブフォルダ）。")
+    ap.add_argument("slug", help="フォルダ名。例 t004-camp（英数字・- ・_）")
     ap.add_argument("--type", choices=sorted(TYPES), default="story")
-    ap.add_argument("--cuts", type=int, help="number of cuts (default: story=3, intro=5)")
-    ap.add_argument("--workspace", help="parent folder (default: setting 'workspace' or ~/threads-videos)")
+    ap.add_argument("--cuts", type=int, help="カット数（既定: story=3、intro=5）")
+    ap.add_argument("--workspace", help="作成先の親フォルダ（既定: 設定 'workspace'、無ければ ~/threads-videos）")
     a = ap.parse_args()
 
-    common.check_id(a.slug, "slug")
+    common.check_id(a.slug, "スラッグ")
     n_default, sec, target = TYPES[a.type]
     n = a.cuts or n_default
     if not 1 <= n <= 30:
-        raise ValueError("--cuts must be between 1 and 30")
+        raise ValueError("--cuts は 1〜30 で指定する")
 
     root = Path(a.workspace).expanduser() if a.workspace else common.workspace()
     root.mkdir(parents=True, exist_ok=True)
-    proj = common.safe_path(root, a.slug, "slug")
+    proj = common.safe_path(root, a.slug, "スラッグ")
     for d in SUBDIRS:
-        common.safe_path(proj, d, "folder").mkdir(parents=True, exist_ok=True)
+        common.safe_path(proj, d, "フォルダ").mkdir(parents=True, exist_ok=True)
 
     created = []
     brief = common.safe_path(proj, "brief.md")
@@ -95,9 +95,9 @@ def main() -> None:
         script.write_text("")
         created.append("voice/script.txt")
 
-    print(f"project: {proj}")
-    print("created: " + (", ".join(created) if created else "nothing (already exists)"))
-    print(f"cuts: {n} ({a.type})")
+    print(f"プロジェクト: {proj}")
+    print("作成: " + (", ".join(created) if created else "なし（すでにある）"))
+    print(f"カット数: {n}（{a.type}）")
 
 
 if __name__ == "__main__":

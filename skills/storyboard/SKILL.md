@@ -1,6 +1,6 @@
 ---
 name: storyboard
-description: "Threads 向け縦型動画の企画と絵コンテ。言いたいことを1文にし、型（物語/紹介）と尺を決め、カット表（動作1つ・カメラ1つ・ナレ・字幕）とラフ画像を作り、動画プロンプトを基準表で自己採点してから承認に出す。Use when planning a short video, writing a storyboard or cut list, drafting narration lines, or preparing the approval packet (\"企画\" \"絵コンテ\" \"コンテ\" \"カット割り\" \"ナレ原稿\" \"storyboard\")."
+description: "Threads 向け縦型動画の企画と絵コンテ。言いたいことを1文にし、型（物語/紹介）と尺を決め、カット表（動作1つ・カメラ1つ・ナレ・字幕）とラフ画像を作り、動画プロンプトを基準表で自己採点してから承認に出す。使う場面：短い動画を企画するとき、絵コンテやカット表を作るとき、ナレ原稿を書くとき、承認に出す資料をまとめるとき（「企画」「絵コンテ」「コンテ」「カット割り」「ナレ原稿」）。"
 ---
 
 # storyboard — 企画・絵コンテ・承認パケット

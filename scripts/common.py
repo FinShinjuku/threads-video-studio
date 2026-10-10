@@ -1,13 +1,13 @@
-"""Shared helpers for threads-video-studio scripts (Python 3.10+, standard library only).
+"""threads-video-studio の各スクリプトで共通に使う関数（Python 3.10+、標準ライブラリのみ）。
 
-Configuration is resolved in this order, first non-empty wins:
-  1. Plugin settings entered in Claude's plugin configuration screen
-     (exposed to scripts as CLAUDE_PLUGIN_OPTION_<KEY>, see README).
-  2. Plain environment variables (FAL_KEY, ELEVENLABS_API_KEY, ...).
-  3. `tvs-config.json` in the current folder (or up to 3 parents) or in the workspace folder (Cowork).
-  4. The user config file written by `setup.py` (~/.config/threads-video-studio/config.json, mode 0600).
+設定は次の順に探し、最初に見つかった空でない値を使う:
+  1. Claude のプラグイン設定画面で入力した値
+     （スクリプトには CLAUDE_PLUGIN_OPTION_<KEY> として渡る。README 参照）。
+  2. 通常の環境変数（FAL_KEY、ELEVENLABS_API_KEY など）。
+  3. 今のフォルダ（または3階層上まで）かワークスペースフォルダにある `tvs-config.json`（Cowork 用）。
+  4. `setup.py` が書くユーザー設定ファイル（~/.config/threads-video-studio/config.json、権限 0600）。
 
-Secrets are never printed. Use `mask()` when showing that a value exists.
+秘密値は表示しない。値があることを示すときは `mask()` を使う。
 """
 
 from __future__ import annotations
@@ -25,30 +25,30 @@ from pathlib import Path
 CONFIG_DIR = Path(os.environ.get("TVS_CONFIG_DIR", Path.home() / ".config" / "threads-video-studio"))
 CONFIG_FILE = CONFIG_DIR / "config.json"
 
-# key -> (environment variable fallbacks, is_secret, description)
+# キー -> (代わりに見る環境変数, 秘密値か, 説明)
 SETTINGS: dict[str, tuple[tuple[str, ...], bool, str]] = {
-    "fal_key": (("FAL_KEY", "FAL_API_KEY"), True, "fal.ai API key (image, video, music generation)"),
-    "elevenlabs_api_key": (("ELEVENLABS_API_KEY",), True, "ElevenLabs API key (narration, music)"),
-    "threads_access_token": (("THREADS_ACCESS_TOKEN",), True, "Threads long-lived access token (posting)"),
-    "threads_user_id": (("THREADS_USER_ID",), False, "Threads user id (optional, looked up from the token)"),
-    "media_bucket": (("TVS_MEDIA_BUCKET",), False, "Private S3 bucket for temporary video URLs (posting)"),
-    "aws_profile": (("AWS_PROFILE",), False, "AWS CLI profile used for the bucket (optional)"),
-    "aws_region": (("AWS_REGION",), False, "AWS region of the bucket (optional)"),
-    "cta_url": (("TVS_CTA_URL",), False, "Call-to-action link, e.g. your LINE official account URL"),
-    "workspace": (("TVS_WORKSPACE",), False, "Folder where projects are created (default ~/threads-videos)"),
-    "narrator_voice_id": (("TVS_NARRATOR_VOICE_ID",), False, "Default ElevenLabs voice id for narration"),
+    "fal_key": (("FAL_KEY", "FAL_API_KEY"), True, "fal.ai の API キー（画像・動画・音楽の生成）"),
+    "elevenlabs_api_key": (("ELEVENLABS_API_KEY",), True, "ElevenLabs の API キー（ナレーション・音楽）"),
+    "threads_access_token": (("THREADS_ACCESS_TOKEN",), True, "Threads の長期アクセストークン（投稿）"),
+    "threads_user_id": (("THREADS_USER_ID",), False, "Threads のユーザー ID（任意。トークンから調べる）"),
+    "media_bucket": (("TVS_MEDIA_BUCKET",), False, "動画の一時 URL を作る非公開 S3 バケット（投稿）"),
+    "aws_profile": (("AWS_PROFILE",), False, "バケットに使う AWS CLI のプロファイル（任意）"),
+    "aws_region": (("AWS_REGION",), False, "バケットの AWS リージョン（任意）"),
+    "cta_url": (("TVS_CTA_URL",), False, "誘導先のリンク（例: LINE 公式アカウントの URL）"),
+    "workspace": (("TVS_WORKSPACE",), False, "プロジェクトを作るフォルダ（既定は ~/threads-videos）"),
+    "narrator_voice_id": (("TVS_NARRATOR_VOICE_ID",), False, "ナレーションに使う ElevenLabs の既定の声 ID"),
 }
 
 
 def _plugin_option(key: str) -> str:
     for name in (f"CLAUDE_PLUGIN_OPTION_{key.upper()}", f"CLAUDE_PLUGIN_OPTION_{key}"):
         v = os.environ.get(name, "").strip()
-        if v and not v.startswith("${"):  # unfilled ${user_config.*} placeholder
+        if v and not v.startswith("${"):  # 未入力の ${user_config.*} プレースホルダー
             return v
     return ""
 
 
-LOCAL_CONFIG_NAME = "tvs-config.json"  # Cowork: placed in the connected folder
+LOCAL_CONFIG_NAME = "tvs-config.json"  # Cowork 用: 接続したフォルダに置く
 
 
 def _read_json(path: Path) -> dict:
@@ -59,12 +59,12 @@ def _read_json(path: Path) -> dict:
 
 
 def load_file() -> dict:
-    """User config file (~/.config/threads-video-studio/config.json)."""
+    """ユーザー設定ファイル（~/.config/threads-video-studio/config.json）。"""
     return _read_json(CONFIG_FILE)
 
 
 def _local_files() -> list[Path]:
-    """tvs-config.json in the current folder, its parents (up to 3) and the workspace folder."""
+    """今のフォルダ、その親（3階層まで）、ワークスペースフォルダにある tvs-config.json。"""
     cwd = Path.cwd()
     cands = [cwd / LOCAL_CONFIG_NAME] + [p / LOCAL_CONFIG_NAME for p in list(cwd.parents)[:3]]
     ws = os.environ.get("TVS_WORKSPACE", "").strip() or str(_read_json(CONFIG_FILE).get("workspace", "")).strip()
@@ -83,15 +83,15 @@ _PERM_WARNED: set = set()
 
 
 def _ensure_private(path: Path) -> None:
-    """A config file holding keys must not be readable by group/other: chmod 600 and warn (never fatal)."""
+    """キーを含む設定ファイルは他のユーザーから読めてはいけない。chmod 600 にして警告する（止めはしない）。"""
     try:
         mode = path.stat().st_mode
         if mode & 0o077:
             try:
                 os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
-                msg = f"warning: {path} was readable by other users; permissions changed to 600"
+                msg = f"警告: {path} が他のユーザーから読める状態だったので、権限を 600 に変えた"
             except OSError:
-                msg = f"warning: {path} is readable by other users; run: chmod 600 '{path}'"
+                msg = f"警告: {path} が他のユーザーから読める。chmod 600 '{path}' を実行してください"
             if str(path) not in _PERM_WARNED:
                 _PERM_WARNED.add(str(path))
                 print(msg, file=sys.stderr)
@@ -127,14 +127,14 @@ def require(key: str) -> str:
     v = get(key)
     if not v:
         desc = SETTINGS.get(key, ((), False, key))[2]
-        sys.exit(f"Missing setting '{key}' ({desc}). Enter it in the plugin settings, "
-                 f"or run: python3 scripts/setup.py set {key}")
+        sys.exit(f"設定 '{key}'（{desc}）がありません。プラグインの設定画面で入力するか、"
+                 f"python3 scripts/setup.py set {key} を実行してください")
     return v
 
 
 def mask(v: str) -> str:
-    """Only says whether a value exists (never its length or any characters)."""
-    return "set" if v else "(empty)"
+    """値があるかどうかだけを返す（長さや文字は一切出さない）。"""
+    return "設定済み" if v else "(未設定)"
 
 
 def workspace() -> Path:
@@ -142,7 +142,7 @@ def workspace() -> Path:
 
 
 class HttpError(RuntimeError):
-    """HTTP error response (status >= 400). `.code` and `.body` (scrubbed, truncated) are available."""
+    """HTTP のエラー応答（ステータス 400 以上）。`.code` と `.body`（秘密値を消して切り詰めたもの）を持つ。"""
 
     def __init__(self, code: int, method: str, url: str, body: str):
         self.code = code
@@ -151,13 +151,13 @@ class HttpError(RuntimeError):
 
 
 class NetworkError(RuntimeError):
-    """Transient network failure that persisted through all retries."""
+    """再試行をすべて使っても直らなかった一時的なネットワーク障害。"""
 
 
 def http_request(method: str, url: str, headers: dict, data: bytes | None = None, timeout: int = 120,
                  retries: int = 3) -> tuple[bytes, str]:
-    """Raw request; returns (body, content_type). Retries network errors and HTTP 5xx, never HTTP 4xx.
-    Use retries=1 for non-idempotent paid POSTs (a retry after a timeout could be billed twice)."""
+    """生のリクエスト。(本文, content_type) を返す。ネットワークエラーと HTTP 5xx は再試行し、4xx は再試行しない。
+    やり直すと結果が変わる有料の POST には retries=1 を使う（タイムアウト後の再試行で二重課金されうるため）。"""
     last = None
     for attempt in range(max(1, retries)):
         req = urllib.request.Request(url, data=data, method=method, headers=headers)
@@ -175,12 +175,12 @@ def http_request(method: str, url: str, headers: dict, data: bytes | None = None
             last = str(e)
             if attempt < retries - 1:
                 time.sleep(5 * (attempt + 1))
-    raise NetworkError(scrub(f"network error {method} {url.split('?')[0]}: {last}"))
+    raise NetworkError(scrub(f"ネットワークエラー {method} {url.split('?')[0]}: {last}"))
 
 
 def http_json(method: str, url: str, headers: dict, body: dict | None = None, timeout: int = 120,
               retries: int = 3) -> dict:
-    """JSON request with retry on transient network errors (never on HTTP 4xx)."""
+    """JSON のリクエスト。一時的なネットワークエラーは再試行する（HTTP 4xx は再試行しない）。"""
     data = json.dumps(body).encode() if body is not None else None
     raw, _ = http_request(method, url, {"Content-Type": "application/json", **headers}, data, timeout, retries)
     return json.loads(raw) if raw else {}
@@ -197,7 +197,7 @@ def download(url: str, dest: Path) -> Path:
 def run(*cmd: str, quiet: bool = True) -> str:
     r = subprocess.run(list(cmd), capture_output=True, text=True)
     if r.returncode != 0:
-        raise RuntimeError(f"{cmd[0]} failed: {r.stderr.strip()[:400]}")
+        raise RuntimeError(f"{cmd[0]} が失敗: {r.stderr.strip()[:400]}")
     return r.stdout.strip()
 
 
@@ -206,7 +206,7 @@ def duration(path: Path) -> float:
 
 
 def data_uri(path: Path, max_width: int = 1080) -> str:
-    """Downscale an image to JPEG and return a data URI (keeps request bodies small)."""
+    """画像を縮小した JPEG にして data URI で返す（リクエスト本文を小さく保つため）。"""
     import base64
     import tempfile
     with tempfile.TemporaryDirectory() as d:
@@ -216,10 +216,10 @@ def data_uri(path: Path, max_width: int = 1080) -> str:
         return "data:image/jpeg;base64," + base64.b64encode(out.read_bytes()).decode()
 
 
-# --- secrets hygiene -------------------------------------------------------------------------
+# --- 秘密値の扱い -------------------------------------------------------------------------
 
 def secret_values() -> list[str]:
-    """All configured secret values (longest first), for scrubbing."""
+    """設定済みの秘密値すべて（長い順）。消し込み用。"""
     vals = []
     for key, (_envs, is_secret, _desc) in SETTINGS.items():
         if is_secret:
@@ -230,7 +230,7 @@ def secret_values() -> list[str]:
 
 
 def scrub(text: str) -> str:
-    """Remove any configured secret value from a message before it is printed or saved."""
+    """表示・保存する前に、メッセージから設定済みの秘密値を消す。"""
     text = str(text)
     for v in secret_values():
         text = text.replace(v, "***")
@@ -238,64 +238,64 @@ def scrub(text: str) -> str:
 
 
 def die(msg: str, code: int = 1) -> None:
-    """Exit non-zero with a one-line, scrubbed reason."""
-    print("error: " + scrub(str(msg)).replace("\n", " ")[:1200], file=sys.stderr)
+    """秘密値を消した1行の理由を出して、0以外で終了する。"""
+    print("エラー: " + scrub(str(msg)).replace("\n", " ")[:1200], file=sys.stderr)
     sys.exit(code)
 
 
 def cli(main) -> None:
-    """Run `main()` and turn expected failures into a one-line scrubbed error."""
+    """`main()` を実行し、想定内の失敗を秘密値を消した1行のエラーにする。"""
     try:
         main()
     except KeyboardInterrupt:
-        die("interrupted", 130)
+        die("中断した", 130)
     except (RuntimeError, OSError, ValueError, KeyError) as e:
         die(f"{type(e).__name__}: {e}")
 
 
-# --- project helpers -------------------------------------------------------------------------
+# --- プロジェクト関連 -------------------------------------------------------------------------
 
 def project_dir(arg: str | None) -> Path:
-    """--project accepts a path or a slug under the workspace. Defaults to the current folder."""
+    """--project にはパスか、ワークスペース内のスラッグを渡せる。省略時は今のフォルダ。"""
     if not arg:
         p = Path.cwd()
     else:
         p = Path(os.path.expanduser(arg))
         if not p.exists() and not p.is_absolute():
-            alt = workspace() / check_id(arg, "project slug")
+            alt = workspace() / check_id(arg, "プロジェクトのスラッグ")
             if alt.exists():
                 p = alt
     if not (p / "shots.json").exists():
-        raise RuntimeError(f"not a project folder (no shots.json): {p}")
+        raise RuntimeError(f"プロジェクトフォルダではない（shots.json が無い）: {p}")
     return p.resolve()
 
 
 ID_PATTERN = r"[A-Za-z0-9_-]{1,64}"
 
 
-def check_id(value: str, what: str = "id") -> str:
-    """Slugs and cut ids: letters, digits, '_' and '-' only (1-64 chars). They become file names."""
+def check_id(value: str, what: str = "ID") -> str:
+    """スラッグとカット ID は英数字・'_'・'-' のみ（1〜64文字）。ファイル名になるため。"""
     import re
     if not isinstance(value, str) or not re.fullmatch(ID_PATTERN, value):
-        raise ValueError(f"invalid {what} {value!r}: allowed characters are A-Z a-z 0-9 _ - (1-64)")
+        raise ValueError(f"{what} {value!r} が不正。使える文字は A-Z a-z 0-9 _ -（1〜64文字）")
     return value
 
 
-def safe_path(base: Path, rel: str | Path, what: str = "path") -> Path:
-    """Resolve `rel` against `base` (following symlinks) and require the result to stay inside `base`.
-    Absolute paths are accepted only when they resolve inside `base`."""
+def safe_path(base: Path, rel: str | Path, what: str = "パス") -> Path:
+    """`rel` を `base` 基準で解決し（シンボリックリンクもたどる）、結果が `base` の中に収まることを求める。
+    絶対パスは `base` の中を指すときだけ受け付ける。"""
     if rel is None or str(rel).strip() == "":
-        raise ValueError(f"empty {what}")
+        raise ValueError(f"{what}が空")
     root = Path(base).resolve()
     p = Path(os.path.expanduser(str(rel)))
     full = (p if p.is_absolute() else root / p).resolve()
     if full != root and root not in full.parents:
-        raise ValueError(f"{what} {str(rel)!r} points outside {root}")
+        raise ValueError(f"{what} {str(rel)!r} が {root} の外を指している")
     return full
 
 
 def resolve(project: Path | None, path: str | Path) -> Path:
-    """Absolute paths stay; relative paths are relative to the project folder (or cwd)."""
+    """絶対パスはそのまま。相対パスはプロジェクトフォルダ（無ければ今のフォルダ）基準。"""
     p = Path(os.path.expanduser(str(path)))
     if p.is_absolute() or project is None:
         return p.resolve() if p.is_absolute() else (Path.cwd() / p).resolve()
@@ -312,7 +312,7 @@ def load_json(path: Path, default=None):
 
 
 def save_json(path: Path, data) -> None:
-    """Atomic JSON write (UTF-8, Japanese kept readable)."""
+    """JSON を原子的に書く（UTF-8、日本語はエスケープしない）。"""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -335,12 +335,12 @@ def fal_headers() -> dict:
 
 
 def fal_run(endpoint: str, body: dict, timeout: int = 600) -> dict:
-    """Synchronous fal call (https://fal.run/<endpoint>). Not retried: a retry could be billed twice."""
+    """fal の同期呼び出し（https://fal.run/<endpoint>）。再試行しない（二重課金されうるため）。"""
     return http_json("POST", f"https://fal.run/{endpoint}", fal_headers(), body, timeout=timeout, retries=1)
 
 
 def media_url_to_file(url: str, dest: Path) -> Path:
-    """Save a result URL (https or data URI) to dest."""
+    """結果の URL（https か data URI）を dest に保存する。"""
     if url.startswith("data:"):
         import base64
         dest.parent.mkdir(parents=True, exist_ok=True)
