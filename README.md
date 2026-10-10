@@ -46,16 +46,28 @@ A settings dialog opens for the API keys (secret fields are masked). Change them
 2. Add the skills: Customize → Plugins → Add → Add marketplace → `FinShinjuku/threads-video-studio`, then install.
 3. Optional: connect your workspace folder (default `~/threads-videos`) to Cowork to browse the videos.
 
-Requires Python 3.10+ on the Mac (`brew install python`), `ffmpeg` and Node.js 18+.
+Before installing, set up the tools listed under Requirements below.
 Without the extension, you can instead open `setup/setup.html`, save `config.json` and place it as
 `tvs-config.json` in the folder connected to Cowork. That file holds your keys in plain text, so the
 extension is the safer choice.
 
-## Requirements
+## 必要なもの（ご自身で入れてください） / Requirements
 
-- Python 3.10+ (standard library only), `ffmpeg`/`ffprobe`, Node.js 18+ (HyperFrames rendering via `npx`)
-- Optional: `pip install pyopenjtalk` (reading check), AWS CLI (auto-posting video)
-- Accounts: fal.ai and ElevenLabs (required); Threads API and AWS (for posting). See [CONNECTORS.md](CONNECTORS.md).
+このプラグインは、下の道具を自動では入れません。使う前に、ご自身の Mac に入れてください。
+The plugin does not install these for you. Install them on your Mac before first use.
+
+| 道具 | 用途 | 入れ方（Homebrew） | 必須 |
+|---|---|---|---|
+| Python 3.10 以上 | すべてのスクリプトと拡張の実行（Mac 標準の 3.9 では動きません） | `brew install python` | 必須 |
+| ffmpeg（ffprobe を含む） | 動画・音声の処理、コマ確認 | `brew install ffmpeg` | 必須 |
+| Node.js 18 以上 | 字幕・BGM 入りの書き出し（HyperFrames を `npx` で実行） | `brew install node` | 必須 |
+| pyopenjtalk | ナレーションの読みの事前チェック（無くても簡易チェックで動く） | `python3 -m pip install pyopenjtalk` | 任意 |
+| AWS CLI | 動画を自動投稿するときの受け渡し（S3） | `brew install awscli` → `aws configure` | 自動投稿するなら |
+
+Homebrew が無い場合は https://brew.sh の手順で先に入れてください。
+入ったかどうかは、Claude に「studio_status を見て」と頼むか、`python3 scripts/setup.py status` で確認できます。
+
+Accounts: fal.ai and ElevenLabs (required); Threads API and AWS (for posting). See [CONNECTORS.md](CONNECTORS.md).
 - macOS is the tested platform. Scheduling uses launchd on macOS or a Cowork scheduled task.
 
 ## Skills
