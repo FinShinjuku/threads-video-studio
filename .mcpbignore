@@ -1,0 +1,12 @@
+.git/
+.gitignore
+.claude-plugin/
+.mcp.json
+skills/
+scripts/tests/
+SPEC.md
+setup/
+dist/
+**/__pycache__/
+*.pyc
+.DS_Store

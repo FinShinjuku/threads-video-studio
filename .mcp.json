@@ -1,9 +1,9 @@
 {
   "mcpServers": {
     "studio": {
-      "command": "python3",
+      "command": "/bin/sh",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/mcp/studio_server.py"
+        "${CLAUDE_PLUGIN_ROOT}/mcp/run.sh"
       ],
       "env": {
         "TVS_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}",

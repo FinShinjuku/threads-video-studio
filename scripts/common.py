@@ -43,7 +43,7 @@ SETTINGS: dict[str, tuple[tuple[str, ...], bool, str]] = {
 def _plugin_option(key: str) -> str:
     for name in (f"CLAUDE_PLUGIN_OPTION_{key.upper()}", f"CLAUDE_PLUGIN_OPTION_{key}"):
         v = os.environ.get(name, "").strip()
-        if v:
+        if v and not v.startswith("${"):  # unfilled ${user_config.*} placeholder
             return v
     return ""
 
@@ -113,7 +113,7 @@ def get(key: str, default: str = "") -> str:
         return v
     for env in SETTINGS.get(key, ((),))[0]:
         v = os.environ.get(env, "").strip()
-        if v:
+        if v and not v.startswith("${"):
             return v
     for f in _local_files():
         v = str(_read_json(f).get(key, "")).strip()

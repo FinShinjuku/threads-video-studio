@@ -13,3 +13,4 @@ __pycache__/
 *.mp3
 *.wav
 node_modules/
+dist/

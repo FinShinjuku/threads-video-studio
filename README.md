@@ -38,12 +38,18 @@ plan → storyboard → [approve] → narration → character sheet & start fram
 A settings dialog opens for the API keys (secret fields are masked). Change them later with
 `/plugin configure threads-video-studio@threads-video-studio`, then ask Claude to run `studio_save_settings` once.
 
-**Claude Cowork**
-Customize → Plugins → Add → Add marketplace → `FinShinjuku/threads-video-studio`, then install.
-Cowork does not show the settings dialog: open `setup/setup.html` in a browser, fill in the keys,
-save `config.json`, and place it as `tvs-config.json` in the folder connected to Cowork.
-That file contains your keys in plain text: keep it out of shared folders and version control
-(the scripts tighten its permissions to owner-only when they can).
+**Claude Cowork / Claude Desktop (recommended)**
+1. Download `threads-video-studio.mcpb` from the [latest release](https://github.com/FinShinjuku/threads-video-studio/releases/latest)
+   and double-click it (or Customize → Connectors → Add → Install extension). A settings form opens:
+   enter your fal.ai and ElevenLabs keys (and the posting settings if you post), then enable it.
+   The keys stay inside the extension, which calls the APIs from your computer.
+2. Add the skills: Customize → Plugins → Add → Add marketplace → `FinShinjuku/threads-video-studio`, then install.
+3. Optional: connect your workspace folder (default `~/threads-videos`) to Cowork to browse the videos.
+
+Requires Python 3.10+ on the Mac (`brew install python`), `ffmpeg` and Node.js 18+.
+Without the extension, you can instead open `setup/setup.html`, save `config.json` and place it as
+`tvs-config.json` in the folder connected to Cowork. That file holds your keys in plain text, so the
+extension is the safer choice.
 
 ## Requirements
 

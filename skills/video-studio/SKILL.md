@@ -10,6 +10,12 @@ description: "Threads 向け縦型 AI 動画づくりの入口（オーケスト
 
 初回、または設定が分からないときは、先に `studio-setup` スキルを読みます。
 
+## 実行のしかた（2通り）
+- **拡張（Threads Video Studio）が入っているとき（Cowork はこちら）**：`studio_*` ツールを使う。キーは拡張の設定画面に入っていて、ツールはこの PC の上で API を呼ぶ。プロジェクトは作品名（slug）で指定する。時間のかかる生成・書き出し・投稿は裏で動くので、`studio_job` で進み具合を見る。
+  - 対応表：`new_project.py`→`studio_new_project`、`gen_image.py`→`studio_gen_image`、`gen_video.py`→`studio_gen_video`、`yomi_check.py`→`studio_yomi_check`、`gen_voice.py`→`studio_gen_voice`、`gen_bgm.py`→`studio_gen_bgm`、`qa_frames.py`→`studio_qa`、`assemble.py`→`studio_assemble`、`threads_post.py`→`studio_post`、`threads_insights.py`→`studio_insights`。shots.json・原稿・本文の書き込みは `studio_write_shots`・`studio_write_text`。
+- **拡張が無いとき（Claude Code）**：各スキルに書いた `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/...` を Bash で実行する。
+- どちらが使えるか分からないときは、まず `studio_status` を呼ぶ。
+
 ## 工程とスキル
 
 | # | 工程 | 担当 | スキル |

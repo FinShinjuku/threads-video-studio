@@ -7,6 +7,7 @@ description: "threads-video-studio の初期設定。fal.ai・ElevenLabs・Threa
 
 
 ## 1. キーを入れる（どれか1つ）
+0. **Cowork／Claude デスクトップ（おすすめ）**：拡張 `threads-video-studio.mcpb` を入れる（GitHub の Releases からダウンロードしてダブルクリック、または カスタマイズ → コネクタ → 追加 → 拡張機能をインストール）。設定画面にキーを入れて有効にすれば、すぐ使える。キーは拡張の中だけで使われる。
 1. **Claude Code のプラグイン設定画面（おすすめ）**：`/plugin` → Installed → threads-video-studio → Configure options。キーは伏せ字で入力でき、安全な保存先に入る。
    入力後、`studio_save_settings` ツールを1回呼ぶ（スクリプトが読む設定ファイルに写す）。
 2. **設定画面（HTML）**：`open ${CLAUDE_PLUGIN_ROOT}/setup/setup.html` でブラウザに開き、入力して `config.json` を保存する。

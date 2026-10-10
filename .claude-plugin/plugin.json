@@ -1,6 +1,6 @@
 {
   "name": "threads-video-studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Make short vertical AI videos for Threads (anime/illustration style, Japanese narration, captions, BGM, call-to-action), with human approval gates, frame-level QA, and scheduled auto-posting and review. Uses fal.ai, ElevenLabs and the Threads API.",
   "author": {
     "name": "FinShinjuku"
