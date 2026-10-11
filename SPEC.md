@@ -74,7 +74,7 @@ cuesheet.xlsx            # キューシート（cuesheet.py が shots.json か�
 | `gen_image.py` | 画像の生成・編集（起点画像、キャラ設定シート、手直し） | `--prompt`、`--image`（参照、複数可）、`--model seedream45|nano-banana-pro`、`--out`、`--size 1440x2560` | png と横に `.json` |
 | `gen_video.py` | カットごとの画像→動画。途中から再開できる | `--project`、`--cut c01` か `--all`、`--draft`（安いモード）、`--variants N`、`--model`、`--dry-run`（見積もりのみ）、`--with-draft` | `clips/<cut>.mp4/.json`、結果待ちの間は `.task` |
 | `yomi_check.py` | 生成前の読みの確認 | `--project`（voice/script.txt を読む）、`--suggest` | 報告と `voice/yomi.json` への提案 |
-| `gen_voice.py` | ElevenLabs v3 で原稿全体を1回で生成（文字ごとの時刻つき） | `--project`、`--voice-id`、`--tag "[cheerfully]"`、`--retime` | all.mp3、align.json、lines.json（各行の開始・終了）、shots.json の start/dur を更新 |
+| `gen_voice.py` | ElevenLabs v3 で原稿全体を1回で生成（文字ごとの時刻つき）。shots.json に `speakers` と各カットの `speaker`（・`pause_before`）があれば、話す人ごとに1回で作って切り出し、カット順に並べる | `--project`、`--voice-id`、`--tag "[cheerfully]"`、`--retime`、`--force` | all.mp3、align.json（話す人が複数なら <speaker>.mp3・align-<speaker>.json）、lines.json（各行の開始・終了・speaker）、shots.json の start/dur を更新 |
 | `gen_bgm.py` | ボーカル無しの BGM | `--project`、`--prompt`、`--seconds`、`--provider elevenlabs|fal` | bgm/candidates/*.mp3 |
 | `qa_frames.py` | コマの一覧画像と数値チェック | `--project`、`--cut`／`--all`／`--final`、`--fps 4` | qa/*.jpg、qa/qa.json（静止区間・動きの量・つなぎ目の差） |
 | `cuesheet.py` | 1行1カットのキューシート（何秒に何を読み、何を映し、素材がどこまでできたか） | `--project`、`--out`（既定 cuesheet.xlsx）、`--check`（書き出さず確認だけ）、`--import <xlsx>` | cuesheet.xlsx（キューシート・この表の見方・確認の3シート）。import は shots.json の chapter・asset_id・picture・kind・note を更新 |
