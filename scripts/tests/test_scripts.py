@@ -17,6 +17,7 @@ sys.path.insert(0, str(HERE.parent))
 os.environ.setdefault("TVS_CONFIG_DIR", tempfile.mkdtemp())  # 本物の設定には触れない
 
 import common  # noqa: E402
+import cuesheet  # noqa: E402
 import gen_image  # noqa: E402
 import gen_video  # noqa: E402
 import gen_voice  # noqa: E402
@@ -428,6 +429,62 @@ class TestReviewFixes(unittest.TestCase):
             finally:
                 os.chdir(cwd)
             self.assertEqual(cfg.stat().st_mode & 0o777, 0o600)
+
+
+class TestCuesheet(unittest.TestCase):
+    def make(self, d: Path) -> Path:
+        proj = d / "t900"
+        for sub in ("clips", "frames"):
+            (proj / sub).mkdir(parents=True)
+        cuts = [
+            {"id": "c01", "chapter": "つかみ", "picture": "メモ", "line": "このメモが、サイトになる。", "action": "a",
+             "camera": "static", "prompt": "p", "start": 0.0, "dur": 4.0},
+            {"id": "c02", "picture": "完成画面", "line": "指示は1行。", "kind": "screen", "start": 4.0, "dur": 3.0},
+            {"id": "c03", "picture": "", "line": "あ" * 30, "kind": "text", "start": 7.5, "dur": 3.0},
+        ]
+        common.save_shots(proj, {"slug": "t900", "type": "story", "cuts": cuts})
+        (proj / "clips" / "c01.mp4").write_bytes(b"x")
+        (proj / "frames" / "c03.png").write_bytes(b"x")
+        return proj
+
+    def test_check_finds_gaps_and_fast_lines(self):
+        with tempfile.TemporaryDirectory() as d:
+            proj = self.make(Path(d))
+            issues = "\n".join(cuesheet.check(common.load_shots(proj)))
+            self.assertIn("c02→c03: 0.50秒のすき間", issues)
+            self.assertIn("c03: ナレーションが1秒あたり10.0字", issues)
+            self.assertIn("c03: 絵の内容が空", issues)
+            self.assertNotIn("c02: 動画プロンプトが空", issues)  # 画面収録は生成しない
+
+    def test_states(self):
+        with tempfile.TemporaryDirectory() as d:
+            proj = self.make(Path(d))
+            body = cuesheet.rows(proj, common.load_shots(proj))
+            state = [r[12] for r in body]
+            self.assertEqual(state, ["生成済", "未着手", "文字カット"])
+            self.assertEqual([r[1] for r in body], ["つかみ", "", ""])
+            self.assertEqual(body[1][3], "0:04.0")
+
+    def test_roundtrip_imports_only_planning_columns(self):
+        with tempfile.TemporaryDirectory() as d:
+            proj = self.make(Path(d))
+            out = proj / "cuesheet.xlsx"
+            cuesheet.export(proj, common.load_shots(proj), out)
+            recs = cuesheet.read_sheet(out)
+            self.assertEqual([r["カットID"] for r in recs], ["c01", "c02", "c03"])
+            recs[1]["備考・ご指示"] = "もっと寄りで"
+            recs[1]["絵の内容"] = "完成画面（スマホ）"
+            recs[2]["ナレーション（読み上げる文）"] = "書き換えた"
+            shots = common.load_shots(proj)
+            changed, skipped = cuesheet.import_sheet(shots, recs)
+            c = {x["id"]: x for x in shots["cuts"]}
+            self.assertEqual(c["c02"]["note"], "もっと寄りで")
+            self.assertEqual(c["c02"]["picture"], "完成画面（スマホ）")
+            self.assertEqual(c["c02"]["chapter"], "つかみ")  # 章は前の行から引き継ぐ
+            self.assertEqual(c["c03"]["line"], "あ" * 30)  # ナレは自動で戻さない
+            self.assertTrue(any("c03" in s and "ナレーション" in s for s in skipped))
+            self.assertNotIn("kind", c["c01"])
+            self.assertGreaterEqual(changed, 1)
 
 
 if __name__ == "__main__":

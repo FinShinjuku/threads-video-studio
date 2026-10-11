@@ -29,6 +29,7 @@ qa/                      # コマの一覧画像, qa.json
 video/                   # HyperFrames のプロジェクト（assemble.py が作る）
 final/                   # <slug>-final.mp4（1080x1920）, <slug>-post.mp4（投稿用に圧縮）
 post.txt                 # 投稿本文
+cuesheet.xlsx            # キューシート（cuesheet.py が shots.json から作る。人が備考・ご指示を書いて戻す）
 ```
 
 ## shots.json の形式
@@ -41,6 +42,10 @@ post.txt                 # 投稿本文
   "cuts": [
     {
       "id": "c01",
+      "chapter": "つかみ",                       // 任意。章（まとまり）の名前
+      "asset_id": "A1",                          // 任意。素材の目印（共有の素材を使い回すとき）
+      "picture": "散らかったメモ帳に手が置かれる",  // 絵の内容（日本語）。人が読む用
+      "kind": "ai",                              // ai（AI生成）| text（文字カット）| screen（画面収録）| footage（実写素材）
       "line": "友達5人で、海辺のキャンプへ！",       // ナレーションの1文（字幕の元にもなる）
       "caption": ["友達5人で、", "[[海辺のキャンプ]]へ！"], // 任意。字幕の行を手で決める。[[ ]] は強調する1語
       "action": "walk into the field",          // 被写体の動作を1つ
@@ -50,7 +55,8 @@ post.txt                 # 投稿本文
       "frame": "frames/c01.png",
       "end_frame": null,                         // 任意。最後のコマ（最初と最後を決めるモード）
       "refs": [],                                // 任意。参照画像（参照モード）
-      "start": 0.0, "dur": 3.2                   // ナレーションの工程で自動で入る
+      "start": 0.0, "dur": 3.2,                  // ナレーションの工程で自動で入る
+      "note": ""                                 // 任意。人からの備考・ご指示（キューシートから取り込む）
     }
   ]
 }
@@ -69,6 +75,7 @@ post.txt                 # 投稿本文
 | `gen_voice.py` | ElevenLabs v3 で原稿全体を1回で生成（文字ごとの時刻つき） | `--project`、`--voice-id`、`--tag "[cheerfully]"`、`--retime` | all.mp3、align.json、lines.json（各行の開始・終了）、shots.json の start/dur を更新 |
 | `gen_bgm.py` | ボーカル無しの BGM | `--project`、`--prompt`、`--seconds`、`--provider elevenlabs|fal` | bgm/candidates/*.mp3 |
 | `qa_frames.py` | コマの一覧画像と数値チェック | `--project`、`--cut`／`--all`／`--final`、`--fps 4` | qa/*.jpg、qa/qa.json（静止区間・動きの量・つなぎ目の差） |
+| `cuesheet.py` | 1行1カットのキューシート（何秒に何を読み、何を映し、素材がどこまでできたか） | `--project`、`--out`（既定 cuesheet.xlsx）、`--check`（書き出さず確認だけ）、`--import <xlsx>` | cuesheet.xlsx（キューシート・この表の見方・確認の3シート）。import は shots.json の chapter・asset_id・picture・kind・note を更新 |
 | `assemble.py` | shots.json・ナレ・BGM から HyperFrames を組んで書き出す | `--project`、`--render` | video/、final/<slug>-final.mp4、final/<slug>-post.mp4 |
 | `threads_post.py` | 投稿の予定表と公開 | `draft`／`approve --by <名前> --note <承認の言葉>`／`schedule --at "YYYY-MM-DD HH:MM"`／`publish-due [--dry-run] [--max N]`／`status`／`mark-published <slug> --post-id`／`refresh-token`（どれも `--workspace` を付けられる。サブコマンドより前に書く） | `<workspace>/posts.json` |
 | `threads_insights.py` | 反応の取り込みと振り返り | `pull`／`review` | `<workspace>/learnings.csv`、`<workspace>/reports/YYYY-MM-DD.md` |
@@ -82,5 +89,6 @@ post.txt                 # 投稿本文
 - gen_video：投入した直後に受付番号を `clips/<cut>.task` に保存し、再実行すると続きから受け取る。通信エラーでは再試行し、成功したら `.task` を消す。受け付けない値を黙って落とさない：モデルごとに秒数・解像度を確かめ、「Allowed: ...」で止める。`--dry-run` は見積もりを出す。結果の取得 URL は保存せず、エンドポイントと受付番号から作り直す。
 - gen_voice：voice/script.txt を読む（空なら shots.json の `line`）。`--retime` は API を呼ばずに align.json から時刻だけ計算し直す。原稿全体を1回で生成する（`/v1/text-to-speech/{voice}/with-timestamps`、モデル `eleven_v3`、`language_code=ja`）。感情タグは冒頭に1つ。読み替え（`voice/yomi.json`）は発話にだけ使い、字幕は元の字面のまま。
 - qa_frames：カットは1秒4コマ、完成版は1秒2コマで一覧にする。`freezedetect` で0.4秒を超える静止を警告する（止まった絵は死んで見える）。カットのつなぎ目の差の最大値を出す。
+- cuesheet：標準ライブラリだけで xlsx を読み書きする（Excel で保存し直したものも読める）。状態は作品フォルダのファイルから決める（clips/<id>.mp4＝生成済、-draft.mp4＝下書きのみ、frames の画像だけ＝静止画のみ／文字カット、どれも無い＝未着手）。確認するのは、空欄・開始＋秒数と次の開始のずれ（0.05秒超）・1秒あたり6字超のナレ・型の目安の尺。import で shots.json に戻すのは計画の列（章・素材ID・絵の内容・素材の種類・備考）だけで、ナレ・字幕・プロンプトの書き換えは一覧で知らせるだけにする（声の作り直しと承認のやり直しにつながるため）。
 - threads_post：承認のときに、本文・トピック・予約時刻・動画（SHA-256）のハッシュを保存する。どれかが承認のあとで変わったら、承認し直すまで公開しない。
 - threads_post：公開するのは、status が approved で、approved_by があり、予約時刻を過ぎていて、published_id が無いものだけ。API を呼ぶ前に `publishing` にする。`publishing` のまま止まったものは自動でやり直さない。動画は `media_url` があればそれを使い、無ければ `video_file` を media_host で S3 に置く。トピックも付けられる（`topic`）。

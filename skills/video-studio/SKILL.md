@@ -12,7 +12,7 @@ description: "Threads 向け縦型 AI 動画づくりの入口（オーケスト
 
 ## 実行のしかた（2通り）
 - **拡張（Threads Video Studio）が入っているとき（Cowork はこちら）**：`studio_*` ツールを使う。キーは拡張の設定画面に入っていて、ツールはこの PC の上で API を呼ぶ。プロジェクトは作品名（slug）で指定する。時間のかかる生成・書き出し・投稿は裏で動くので、`studio_job` で進み具合を見る。
-  - 対応表：`new_project.py`→`studio_new_project`、`gen_image.py`→`studio_gen_image`、`gen_video.py`→`studio_gen_video`、`yomi_check.py`→`studio_yomi_check`、`gen_voice.py`→`studio_gen_voice`、`gen_bgm.py`→`studio_gen_bgm`、`qa_frames.py`→`studio_qa`、`assemble.py`→`studio_assemble`、`threads_post.py`→`studio_post`、`threads_insights.py`→`studio_insights`。shots.json・原稿・本文の書き込みは `studio_write_shots`・`studio_write_text`。
+  - 対応表：`new_project.py`→`studio_new_project`、`gen_image.py`→`studio_gen_image`、`gen_video.py`→`studio_gen_video`、`yomi_check.py`→`studio_yomi_check`、`gen_voice.py`→`studio_gen_voice`、`gen_bgm.py`→`studio_gen_bgm`、`qa_frames.py`→`studio_qa`、`cuesheet.py`→`studio_cuesheet`、`assemble.py`→`studio_assemble`、`threads_post.py`→`studio_post`、`threads_insights.py`→`studio_insights`。shots.json・原稿・本文の書き込みは `studio_write_shots`・`studio_write_text`。
 - **拡張が無いとき（Claude Code）**：各スキルに書いた `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/...` を Bash で実行する。
 - どちらが使えるか分からないときは、まず `studio_status` を呼ぶ。
 
@@ -21,7 +21,7 @@ description: "Threads 向け縦型 AI 動画づくりの入口（オーケスト
 | # | 工程 | 担当 | スキル |
 |---|---|---|---|
 | 1 | 企画（言いたいこと1文・型・誰に） | Claude が案、人が選ぶ | `storyboard` |
-| 2 | 絵コンテ（カット表＋ラフ画像）とプロンプトの自己採点 | Claude | `storyboard` |
+| 2 | 絵コンテ（カット表＋ラフ画像）→ キューシート（1行1カットの表）→ プロンプトの自己採点 | Claude | `storyboard` |
 | **G1** | **絵コンテ・ナレ原稿・見積もりの承認** | **人** | — |
 | 3 | 読みの事前チェック → ナレを通しで1回生成 → 尺を確定 | Claude | `narration` |
 | 4 | キャラ設定シート（初回だけ）→ 起点画像を清書・仮置きを消す | Claude | `character-sheet` |
@@ -52,3 +52,4 @@ description: "Threads 向け縦型 AI 動画づくりの入口（オーケスト
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/new_project.py t004-example --type story   # ~/threads-videos/t004-example/ ができる
 ```
 `shots.json` が、カット・プロンプト・尺の唯一の正本です。絵コンテ・生成・仕上げ・投稿は、すべてここから読みます。
+人に見せるときは、shots.json をそのまま見せず、キューシート（`cuesheet.py` で作る `cuesheet.xlsx`）にして見せます。工程が進むたびに書き出し直し、状態の列で進み具合が分かるようにします。
