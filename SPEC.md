@@ -4,7 +4,7 @@
 スクリプトの引数や出力を変えたら、ここも合わせて直してください。
 
 ## 目的
-Threads 向けに、アニメ調・イラスト調の短い縦型（9:16）AI 動画を、日本語ナレーション・字幕・BGM・誘導ボタン付きで作り、予約して自動投稿し、結果を振り返る。お金のかかる生成の前と、投稿の前には、人の承認を必ず入れる。
+Threads 向けに、アニメ調・イラスト調か顔を映さない実写寄りの、短い縦型（9:16）AI 動画を、日本語ナレーション・字幕・BGM・誘導ボタン付きで作り、予約して自動投稿し、結果を振り返る。お金のかかる生成の前と、投稿の前には、人の承認を必ず入れる。
 
 ## 動かす環境
 - Python 3.10 以上、**標準ライブラリのみ**（任意で `yomi_check.py` 用の `pyopenjtalk`）。
@@ -15,7 +15,8 @@ Threads 向けに、アニメ調・イラスト調の短い縦型（9:16）AI �
 ## 作品フォルダ（動画1本＝1フォルダ）
 `<workspace>/<slug>/`（workspace の初期値は `~/threads-videos`。slug は例えば `t004-camp`。slug とカット ID は `^[A-Za-z0-9_-]{1,64}$` に限る）
 ```
-brief.md                 # 言いたいこと、誰に向けるか、型（story|intro）、目標の尺
+brief.md                 # 言いたいこと、誰に向けるか、型（short|story|intro）、目標の尺
+world.md                 # 任意。世界観設計（シリーズの正本 <workspace>/worlds/<シリーズ>.md の写し。skills/worldview）
 shots.json               # カットの唯一の正本（下の形式）
 storyboard/              # ラフ c01.png ...（どの生成でもよい）、確認用の index.html
 character/               # sheet.png（キャラ設定シート）、refs/*.png
@@ -28,7 +29,8 @@ bgm/                     # bgm.mp3（選んだ曲）, candidates/
 qa/                      # コマの一覧画像, qa.json
 video/                   # HyperFrames のプロジェクト（assemble.py が作る）
 final/                   # <slug>-final.mp4（1080x1920）, <slug>-post.mp4（投稿用に圧縮）
-post.txt                 # 投稿本文
+post.txt                 # 投稿本文（ツリーのフック＝1投稿目。動画を付けて自動公開する）
+post-thread.txt          # 任意。ツリーの本文（2投稿目以降）。承認一式に含め、公開後に返信として出す
 cuesheet.xlsx            # キューシート（cuesheet.py が shots.json から作る。人が備考・ご指示を書いて戻す）
 ```
 
@@ -36,7 +38,7 @@ cuesheet.xlsx            # キューシート（cuesheet.py が shots.json か�
 ```json
 {
   "slug": "t004-camp",
-  "type": "story",                 // story（10〜15秒・3カット前後）| intro（20〜30秒）
+  "type": "story",                 // short（5〜10秒・1〜3カット）| story（10〜15秒・3カット前後）| intro（20〜30秒）
   "fps": 24,
   "cta": {"label": "LINEで話してみる", "sub": "プロフィールのリンクから", "show": true},
   "cuts": [
@@ -68,7 +70,7 @@ cuesheet.xlsx            # キューシート（cuesheet.py が shots.json か�
 | スクリプト | 役割 | 主な引数 | 出力 |
 |---|---|---|---|
 | `setup.py` | 設定の確認・入力 | `status`／`set <key>`（入力は画面に出ない）／`path`／`import <json>` | 設定ファイル（0600） |
-| `new_project.py` | 作品フォルダを作る | `<slug> --type story|intro` | フォルダ、brief.md、shots.json |
+| `new_project.py` | 作品フォルダを作る | `<slug> --type short|story|intro` | フォルダ、brief.md、shots.json |
 | `gen_image.py` | 画像の生成・編集（起点画像、キャラ設定シート、手直し） | `--prompt`、`--image`（参照、複数可）、`--model seedream45|nano-banana-pro`、`--out`、`--size 1440x2560` | png と横に `.json` |
 | `gen_video.py` | カットごとの画像→動画。途中から再開できる | `--project`、`--cut c01` か `--all`、`--draft`（安いモード）、`--variants N`、`--model`、`--dry-run`（見積もりのみ）、`--with-draft` | `clips/<cut>.mp4/.json`、結果待ちの間は `.task` |
 | `yomi_check.py` | 生成前の読みの確認 | `--project`（voice/script.txt を読む）、`--suggest` | 報告と `voice/yomi.json` への提案 |

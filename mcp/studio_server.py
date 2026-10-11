@@ -31,7 +31,7 @@ sys.path.insert(0, str(SCRIPTS))
 import common  # noqa: E402
 
 PROTOCOL = "2025-06-18"
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 OPT_PREFIX = "TVS_OPT_"
 
 
@@ -203,7 +203,7 @@ def t_write_shots(a):
 
 
 def t_write_text(a):
-    allowed = {"brief.md", "voice/script.txt", "voice/yomi.json", "post.txt"}
+    allowed = {"brief.md", "world.md", "voice/script.txt", "voice/yomi.json", "post.txt", "post-thread.txt"}
     if a["file"] not in allowed:
         raise ValueError(f"file は {sorted(allowed)} のどれかにする")
     p = project(a["slug"]) / a["file"]
@@ -341,11 +341,11 @@ TOOLS = dict((t["name"], (t, f)) for t, f in [
     tool("studio_status", "どの設定が入力済みか（秘密値は設定済みかどうかだけ）、ワークスペース、ffmpeg・npx・aws が入っているかを表示する。", fn=t_status),
     tool("studio_save_settings", "設定画面の値を、本人だけが読めるローカルの設定ファイルにコピーする（シェルのスクリプトからも使えるようにするため）。返すのはキーの名前だけ。", fn=t_save_settings),
     tool("studio_paths", "このパソコン上のプラグイン・スクリプト・ワークスペース・設定ファイルのパスを返す。", fn=t_paths),
-    tool("studio_new_project", "brief.md と shots.json を入れた動画プロジェクトのフォルダを作る。", {"slug": SLUG, "type": {"type": "string", "enum": ["story", "intro"]}, "cuts": N}, ["slug"], t_new_project),
+    tool("studio_new_project", "brief.md と shots.json を入れた動画プロジェクトのフォルダを作る。", {"slug": SLUG, "type": {"type": "string", "enum": ["short", "story", "intro"]}, "cuts": N}, ["slug"], t_new_project),
     tool("studio_list_projects", "ワークスペースのプロジェクトを、クリップ数と完成動画の有無付きで一覧にする。", fn=t_list_projects),
     tool("studio_read_shots", "プロジェクトの shots.json（カット・プロンプト・タイミング）を読む。", {"slug": SLUG}, ["slug"], t_read_shots),
     tool("studio_write_shots", "プロジェクトの shots.json を置き換える。オブジェクト全体を渡す。", {"slug": SLUG, "shots": {"type": "object"}}, ["slug", "shots"], t_write_shots),
-    tool("studio_write_text", "プロジェクトの brief.md・voice/script.txt（1カット1行のナレーション）・voice/yomi.json・post.txt を書く。", {"slug": SLUG, "file": {"type": "string", "enum": ["brief.md", "voice/script.txt", "voice/yomi.json", "post.txt"]}, "text": S}, ["slug", "file", "text"], t_write_text),
+    tool("studio_write_text", "プロジェクトの brief.md・world.md（世界観設計）・voice/script.txt（1カット1行のナレーション）・voice/yomi.json・post.txt（フック＝1投稿目）・post-thread.txt（ツリーの本文＝2投稿目以降）を書く。", {"slug": SLUG, "file": {"type": "string", "enum": ["brief.md", "world.md", "voice/script.txt", "voice/yomi.json", "post.txt", "post-thread.txt"]}, "text": S}, ["slug", "file", "text"], t_write_text),
     tool("studio_gen_image", "有料。画像を生成・編集する（絵コンテ・キャラクターシート・開始フレーム）。パスはプロジェクト基準。料金は dry_run で確かめる。", {"slug": SLUG, "prompt": S, "out": S, "model": {"type": "string", "enum": ["seedream45", "nano-banana-pro"]}, "images": {"type": "array", "items": S}, "size": S, "dry_run": B, "force": B}, ["slug", "prompt", "out"], t_gen_image),
     tool("studio_gen_video", "有料。開始フレームから動画のカットを生成する（バックグラウンドのジョブ。途中から再開できる）。承認の前に dry_run（+with_draft）で見積もる。", {"slug": SLUG, "cut": S, "all": B, "draft": B, "variants": N, "model": S, "dry_run": B, "with_draft": B, "force": B}, ["slug"], t_gen_video),
     tool("studio_yomi_check", "生成の前にナレーションの読みを確かめる。suggest=true で voice/yomi.json に読みの候補を追記する。", {"slug": SLUG, "suggest": B}, ["slug"], t_yomi),

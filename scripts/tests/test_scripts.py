@@ -447,6 +447,13 @@ class TestCuesheet(unittest.TestCase):
         (proj / "frames" / "c03.png").write_bytes(b"x")
         return proj
 
+    def test_short_type(self):
+        shots = new_project.make_shots("t901", "short", *new_project.TYPES["short"][:1], new_project.TYPES["short"][1])
+        self.assertEqual(len(shots["cuts"]), 2)
+        total = sum(c["dur"] for c in shots["cuts"])
+        lo, hi = cuesheet.TYPE_TARGET["short"]
+        self.assertTrue(lo <= total <= hi)
+
     def test_check_finds_gaps_and_fast_lines(self):
         with tempfile.TemporaryDirectory() as d:
             proj = self.make(Path(d))

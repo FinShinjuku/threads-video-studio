@@ -28,7 +28,7 @@ import common
 SHEET = "キューシート"
 KINDS = {"ai": "AI生成", "text": "文字カット", "screen": "画面収録", "footage": "実写素材"}
 KIND_BY_LABEL = {v: k for k, v in KINDS.items()}
-TYPE_TARGET = {"story": (10.0, 15.0), "intro": (20.0, 30.0)}
+TYPE_TARGET = {"short": (5.0, 10.0), "story": (10.0, 15.0), "intro": (20.0, 30.0)}
 CHARS_PER_SEC_MAX = 6.0
 
 # (見出し, 幅, 取り込み時に shots.json へ戻すキー or None)

@@ -18,6 +18,7 @@ import common
 SUBDIRS = ["storyboard", "character/refs", "frames", "clips", "voice", "bgm/candidates", "qa", "video", "final"]
 TYPES = {
     # 種類 -> (既定のカット数, 1カットの既定秒数, 目標の尺)
+    "short": (2, 4.0, "5-10s"),
     "story": (3, 4.0, "10-15s"),
     "intro": (5, 5.0, "20-30s"),
 }
