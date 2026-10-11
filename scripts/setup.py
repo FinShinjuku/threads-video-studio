@@ -29,6 +29,9 @@ def cmd_status() -> None:
         v = common.get(key)
         shown = common.mask(v) if secret else (v or "(未設定)")
         print(f"  {key:22} {shown:28} {desc}")
+    print("このパソコンのツール:")
+    for tool, arg in (("ffmpeg", "-version"), ("ffprobe", "-version"), ("npx", "--version"), ("aws", "--version")):
+        print(f"  {tool:22} {common.tool_health(tool, arg)}")
 
 
 def cmd_set(key: str) -> None:

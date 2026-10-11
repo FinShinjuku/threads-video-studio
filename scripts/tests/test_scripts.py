@@ -515,3 +515,28 @@ class TestCuesheet(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ToolHealthTest(unittest.TestCase):
+    def test_missing_and_broken(self):
+        self.assertEqual(common.tool_health("tvs-no-such-tool-xyz"), "無い")
+        with tempfile.TemporaryDirectory() as d:
+            fake = Path(d) / "ffmpeg"
+            fake.write_text("#!/bin/sh\necho 'dyld[1]: Library not loaded: /opt/homebrew/opt/jpeg-xl/lib/libjxl.0.11.dylib' >&2\nexit 134\n")
+            fake.chmod(0o755)
+            ok = Path(d) / "goodtool"
+            ok.write_text("#!/bin/sh\nexit 0\n")
+            ok.chmod(0o755)
+            old = os.environ["PATH"]
+            os.environ["PATH"] = d + os.pathsep + old
+            try:
+                state = common.tool_health("ffmpeg")
+                self.assertTrue(state.startswith("壊れている"))
+                self.assertIn("libjxl", state)
+                self.assertIn("brew upgrade ffmpeg", state)
+                self.assertEqual(common.tool_health("goodtool"), "あり")
+                with self.assertRaisesRegex(RuntimeError, "brew upgrade ffmpeg"):
+                    common.run("ffmpeg", "-version")
+            finally:
+                os.environ["PATH"] = old
+

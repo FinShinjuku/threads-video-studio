@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import shutil
 import subprocess
 import sys
 import time
@@ -194,11 +195,35 @@ def download(url: str, dest: Path) -> Path:
     return dest
 
 
+BROKEN_HINT = ("Homebrew で別の道具を入れたときに、共有ライブラリだけが新しくなって壊れた可能性が高い。"
+               "`brew upgrade {tool}`（直らなければ `brew reinstall {tool}`）で直る")
+
+
 def run(*cmd: str, quiet: bool = True) -> str:
     r = subprocess.run(list(cmd), capture_output=True, text=True)
     if r.returncode != 0:
-        raise RuntimeError(f"{cmd[0]} が失敗: {r.stderr.strip()[:400]}")
+        msg = f"{cmd[0]} が失敗: {r.stderr.strip()[:400]}"
+        if "Library not loaded" in r.stderr:
+            msg += "\n" + BROKEN_HINT.format(tool=Path(cmd[0]).name)
+        raise RuntimeError(msg)
     return r.stdout.strip()
+
+
+def tool_health(tool: str, version_arg: str = "-version") -> str:
+    """道具が「あり」「無い」「壊れている（理由）」のどれかを返す。入っていても起動できないことがある。"""
+    path = shutil.which(tool)
+    if not path:
+        return "無い"
+    try:
+        r = subprocess.run([path, version_arg], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"壊れている（起動できない: {e}）"
+    if r.returncode == 0:
+        return "あり"
+    err = (r.stderr or r.stdout).strip().splitlines()
+    first = next((x.strip() for x in err if "Library not loaded" in x), err[0].strip() if err else f"終了コード {r.returncode}")
+    hint = BROKEN_HINT.format(tool=tool) if "Library not loaded" in r.stderr else ""
+    return f"壊れている（{first[:160]}）{' ' + hint if hint else ''}"
 
 
 def duration(path: Path) -> float:

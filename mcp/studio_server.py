@@ -146,8 +146,8 @@ def t_status(_):
         v = cfg.get(key) or common.get(key)
         lines.append(f"- {key}: {('設定済み' if v else '(未設定)') if secret else (v or '(未設定)')}  — {desc}")
     lines.append("このパソコンのツール:")
-    for tool in ("ffmpeg", "ffprobe", "npx", "aws"):
-        lines.append(f"- {tool}: {'あり' if shutil.which(tool) else '無い'}")
+    for tool, arg in (("ffmpeg", "-version"), ("ffprobe", "-version"), ("npx", "--version"), ("aws", "--version")):
+        lines.append(f"- {tool}: {common.tool_health(tool, arg)}")
     return "\n".join(lines)
 
 
