@@ -108,7 +108,36 @@ def save_file(data: dict) -> None:
     tmp.replace(CONFIG_FILE)
 
 
-def get(key: str, default: str = "") -> str:
+KEYCHAIN_PREFIX = "keychain:"
+
+
+def keychain_ref(v: str) -> tuple[str, str] | None:
+    """"keychain:<service>" か "keychain:<service>@<account>" なら (service, account) を返す。"""
+    if not v.startswith(KEYCHAIN_PREFIX):
+        return None
+    svc, _, acct = v[len(KEYCHAIN_PREFIX):].partition("@")
+    if not svc.strip():
+        raise RuntimeError("keychain: の後にサービス名が無い")
+    return svc.strip(), acct.strip()
+
+
+def read_keychain(svc: str, acct: str = "") -> str:
+    cmd = ["security", "find-generic-password", "-s", svc, "-w"] + (["-a", acct] if acct else [])
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0 or not r.stdout.strip():
+        raise RuntimeError(f"Keychain に {svc}{'@' + acct if acct else ''} が無い（または読めない）")
+    return r.stdout.strip()
+
+
+def write_keychain(svc: str, acct: str, value: str) -> None:
+    r = subprocess.run(["security", "add-generic-password", "-U", "-s", svc, "-a", acct or os.environ.get("USER", ""),
+                        "-T", "/usr/bin/security", "-w", value], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"Keychain に {svc} を書けない: {r.stderr.strip()[:200]}")
+
+
+def raw_get(key: str, default: str = "") -> str:
+    """設定の生の値（keychain: の参照を解決しない）。"""
     v = _plugin_option(key)
     if v:
         return v
@@ -122,6 +151,14 @@ def get(key: str, default: str = "") -> str:
             return v
     v = str(load_file().get(key, "")).strip()
     return v or default
+
+
+def get(key: str, default: str = "") -> str:
+    """設定の値。"keychain:<service>[@<account>]" と書かれていれば、macOS の Keychain から読む
+    （秘密値を設定ファイルに平文で置かずに済む。launchd のジョブからも読める）。"""
+    v = raw_get(key, default)
+    ref = keychain_ref(v) if v else None
+    return read_keychain(*ref) if ref else v
 
 
 def require(key: str) -> str:
