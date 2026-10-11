@@ -525,6 +525,22 @@ class CaptionTimingTest(unittest.TestCase):
         self.assertEqual(tl[1][1], 3.2)
 
 
+class CaptionOnlyTest(unittest.TestCase):
+    def test_caption_only_timeline(self):
+        cuts = [{"id": "c01", "caption": ["朝5時。", "畑はAIが耕す"], "start": 0, "dur": 2.5},
+                {"id": "c02", "caption": ["縁側で、お茶"], "start": 2.5, "dur": 2.5}]
+        tl = assemble.caption_timeline(cuts, [], 5.0)
+        self.assertEqual(len(tl), 2)  # 1カット1枚（caption の要素は同じ枚の行）
+        self.assertLessEqual(tl[-1][1], 5.0)
+
+    def test_narration_required_only_with_lines(self):
+        proj = Path(tempfile.mkdtemp())
+        (proj / "shots.json").write_text(json.dumps({"slug": "t900", "cuts": [
+            {"id": "c01", "line": "読み上げる", "start": 0, "dur": 2}]}), encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "voice/all.mp3"):
+            assemble.build(proj)
+
+
 class MediaHostOutputTest(unittest.TestCase):
     def test_url_hidden_by_default(self):
         import contextlib
