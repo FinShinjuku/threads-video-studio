@@ -25,7 +25,7 @@ clips/                   # 生成したカット c01.mp4 と c01.json（受付�
                          #   c01-draft.mp4 = 下書き（安いモード）。本番のカットは上書きしない
                          #   c01.task = 結果待ちの受付番号（再開用）
 voice/                   # script.txt, yomi.json, all.mp3, align.json, lines.json
-bgm/                     # bgm.mp3（選んだ曲）, candidates/
+bgm/                     # bgm.mp3（選んだ曲）, SOURCE.md（曲の出どころ・規約）, original.mp3, candidates/
 qa/                      # コマの一覧画像, qa.json
 video/                   # HyperFrames のプロジェクト（assemble.py が作る）
 final/                   # <slug>-final.mp4（1080x1920）, <slug>-post.mp4（投稿用に圧縮）
