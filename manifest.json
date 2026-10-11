@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "threads-video-studio",
   "display_name": "Threads Video Studio",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Threads 向けの縦型 AI 動画（アニメ調・日本語ナレ・字幕・BGM・誘導ボタン）を作り、予約投稿して振り返るための道具。キーはこの画面に入れるだけで、チャットや作業フォルダに貼る必要はありません。",
   "long_description": "fal.ai（画像・動画・BGM）と ElevenLabs（日本語ナレーション）で短い縦型動画を作り、Threads API で予約投稿・振り返りまで行います。キーはこの拡張の中だけで使われ、あなたの PC の上で API を呼びます。Claude Cowork と Claude Code のどちらからも使えます。作り方の手順（スキル）は、同じリポジトリの Claude プラグイン threads-video-studio に入っています。",
   "author": {

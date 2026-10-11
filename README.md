@@ -113,7 +113,7 @@ Homebrew が無い場合は、先に https://brew.sh の手順で入れてくだ
 |---|---|
 | `fal_key` | fal.ai（画像・動画・BGM） |
 | `elevenlabs_api_key`、`narrator_voice_id` | ナレーションと BGM |
-| `threads_access_token`、`threads_user_id` | 投稿と反応の取り込み |
+| `threads_access_token`、`threads_user_id` | 投稿と反応の取り込み（秘密値は `keychain:<サービス名>@<アカウント>` と書けば Keychain から読む） |
 | `cta_url` | 投稿本文に入れるリンク（`?t=<作品名>` が付く） |
 | `media_bucket`、`aws_profile`、`aws_region` | 動画を Threads に渡すための非公開の S3 バケット |
 | `workspace` | 作品・投稿の予定表・レポートを置く場所（初期値 `~/threads-videos`） |

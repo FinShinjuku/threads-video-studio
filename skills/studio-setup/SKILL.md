@@ -25,7 +25,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup.py status
 |---|---|
 | `fal_key` | 画像・動画・BGM の生成（必須） |
 | `elevenlabs_api_key`、`narrator_voice_id` | ナレーション（必須）、BGM |
-| `threads_access_token` | 予約投稿・振り返り |
+| `threads_access_token` | 予約投稿・振り返り（`keychain:<サービス名>@<アカウント>` と書くと Mac の Keychain から読む。平文で置かずに済む） |
 | `cta_url` | 投稿本文のリンク（例：公式 LINE） |
 | `media_bucket`、`aws_profile`、`aws_region` | 動画の自動投稿（S3 経由） |
 

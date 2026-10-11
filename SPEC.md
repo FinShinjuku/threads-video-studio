@@ -79,7 +79,7 @@ cuesheet.xlsx            # キューシート（cuesheet.py が shots.json か�
 | `qa_frames.py` | コマの一覧画像と数値チェック | `--project`、`--cut`／`--all`／`--final`、`--fps 4` | qa/*.jpg、qa/qa.json（静止区間・動きの量・つなぎ目の差） |
 | `cuesheet.py` | 1行1カットのキューシート（何秒に何を読み、何を映し、素材がどこまでできたか） | `--project`、`--out`（既定 cuesheet.xlsx）、`--check`（書き出さず確認だけ）、`--import <xlsx>` | cuesheet.xlsx（キューシート・この表の見方・確認の3シート）。import は shots.json の chapter・asset_id・picture・kind・note を更新 |
 | `assemble.py` | shots.json・ナレ・BGM から HyperFrames を組んで書き出す | `--project`、`--render` | video/、final/<slug>-final.mp4、final/<slug>-post.mp4 |
-| `threads_post.py` | 投稿の予定表と公開 | `draft`／`approve --by <名前> --note <承認の言葉>`／`schedule --at "YYYY-MM-DD HH:MM"`／`publish-due [--dry-run] [--max N]`／`status`／`mark-published <slug> --post-id`／`refresh-token`（どれも `--workspace` を付けられる。サブコマンドより前に書く） | `<workspace>/posts.json` |
+| `threads_post.py` | 投稿の予定表と公開（`--thread-file` の本文ツリーは公開直後に返信として順に出す） | `draft [--thread-file post-thread.txt]`／`approve --by <名前> --note <承認の言葉>`／`schedule --at "YYYY-MM-DD HH:MM"`／`publish-due [--dry-run] [--max N]`／`status`／`mark-published <slug> --post-id`／`refresh-token`（どれも `--workspace` を付けられる。サブコマンドより前に書く） | `<workspace>/posts.json` |
 | `threads_insights.py` | 反応の取り込みと振り返り | `pull`／`review` | `<workspace>/learnings.csv`、`<workspace>/reports/YYYY-MM-DD.md` |
 | `media_host.py` | 手元の動画を非公開の S3 に置き、1時間有効の署名付き URL を作る | `<file>`／`--create-bucket [--dry-run]`／`--check`／`--show-url` | 既定では URL を表示しない |
 | `install_scheduler.py` | macOS の launchd で `publish-due` を N 分ごとに動かす | 既定は確認のみ、`--apply`、`--uninstall`、`--interval` | `~/Library/LaunchAgents/com.threads-video-studio.publish.plist` |

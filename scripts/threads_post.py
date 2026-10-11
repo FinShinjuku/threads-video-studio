@@ -21,8 +21,14 @@ publish-due が公開するのは、次のすべてを満たすものだけ:
     `mark-published` を実行するか下書きからやり直す
   - ロックファイルで同時に2つ動かない
 
+本文ツリー（返信）:
+  draft に --thread-file post-thread.txt を付けると、`---` だけの行で区切った各段落を、公開した投稿への
+  返信として順に出す（1つ前の返信にぶら下げる）。本文も承認の対象（変えたら承認し直し）。
+  返信ごとに、公開を呼ぶ前に thread_state=posting:<n> を書く。呼んだあとに失敗したら unknown:<n> にして
+  自動では再試行しない（二重投稿の防止）。コンテナ作成で失敗したものは、次の実行で続きから出す（最大3回）。
+
 サブコマンド:
-  draft --project <dir> --text-file post.txt [--topic AI活用] [--at "YYYY-MM-DD HH:MM"] [--hook ..] [--format ..]
+  draft --project <dir> --text-file post.txt [--thread-file post-thread.txt] [--topic AI活用] [--at "YYYY-MM-DD HH:MM"] [--hook ..] [--format ..]
   approve <slug> --by <name>          （チャットで人が OK したときだけ）
   schedule <slug> --at "YYYY-MM-DD HH:MM"
   status
@@ -125,12 +131,24 @@ def file_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+THREAD_SEP = re.compile(r"^\s*---\s*$", re.M)
+THREAD_MAX_TRIES = 3
+
+
+def read_thread(path: Path) -> list[str]:
+    """`---` だけの行で区切った本文ツリー。空の段落は捨てる。"""
+    parts = [x.strip() for x in THREAD_SEP.split(path.read_text(encoding="utf-8"))]
+    return [x for x in parts if x]
+
+
 def content_hash(item: dict) -> str:
     """人が承認した内容そのもののハッシュ: 本文・トピック・予約時刻・動画
-    （media_url があればその文字列、無ければ動画ファイルの中身の SHA-256）。"""
+    （media_url があればその文字列、無ければ動画ファイルの中身の SHA-256）・本文ツリー（あれば）。"""
     h = hashlib.sha256()
     for k in ("text", "topic", "scheduled_at", "media_url"):
         h.update(k.encode() + b"=" + str(item.get(k, "")).encode() + b"\0")
+    if item.get("thread"):
+        h.update(b"thread=" + json.dumps(item["thread"], ensure_ascii=False).encode() + b"\0")
     if not str(item.get("media_url", "")).strip():
         vf = Path(str(item.get("video_file", ""))).expanduser()
         h.update(b"video=" + (file_sha256(vf).encode() if vf.is_file() else b"missing"))
@@ -159,6 +177,8 @@ def eligible(item: dict, now) -> tuple[bool, str]:
 def check_before_publish(item: dict) -> str | None:
     """公開直前の内容チェック。エラーメッセージか None を返す。"""
     errs = validate_text(item.get("text", "")) + validate_topic(item.get("topic", ""))
+    for i, part in enumerate(item.get("thread") or [], 2):
+        errs += [f"{i}投稿目: {e}" for e in validate_text(part)]
     if errs:
         return "; ".join(errs)
     if item.get("status") == APPROVED and item.get("approved_hash") != content_hash(item):
@@ -188,6 +208,92 @@ def media_url_for(item: dict, stage=None) -> str:
     return stage(str(Path(item["video_file"]).expanduser()))
 
 
+def wait_container(g, cid: str, sleep=time.sleep, clock=time.monotonic, timeout: int = POLL_TIMEOUT_S) -> None:
+    start = clock()
+    while True:
+        st = g.get(cid, fields="status,error_message")
+        s = st.get("status")
+        if s == "FINISHED":
+            return
+        if s in ("ERROR", "EXPIRED"):
+            raise RuntimeError(f"コンテナ {cid} {s}: {st.get('error_message', '')}")
+        if clock() - start > timeout:
+            raise RuntimeError(f"コンテナ {cid} が {timeout} 秒以内に FINISHED にならない（status={s}）")
+        sleep(POLL_INTERVAL_S)
+
+
+def publish_reply(g, uid: str, text: str, reply_to: str, sleep=time.sleep, clock=time.monotonic,
+                  on_phase=None) -> str:
+    """文字だけの返信を1つ出し、投稿 ID を返す。公開を呼ぶ直前に on_phase("publish_call")。"""
+    cid = str(g.post(f"{api.check_id(uid)}/threads", media_type="TEXT", text=text,
+                     reply_to_id=api.check_id(reply_to)).get("id", "")).strip()
+    if not cid:
+        raise RuntimeError("返信のコンテナ ID が返ってこない")
+    cid = api.check_id(cid)
+    wait_container(g, cid, sleep, clock, timeout=120)
+    if on_phase:
+        on_phase("publish_call")
+    pid = str(g.post(f"{uid}/threads_publish", creation_id=cid).get("id", "")).strip()
+    if not pid:
+        raise RuntimeError(f"返信のコンテナ {cid} を公開したが投稿 ID が返ってこない。Threads を確かめてください")
+    return api.check_id(pid)
+
+
+def thread_pending(item: dict) -> bool:
+    """公開済みで、本文ツリーの返信がまだ残っていて、自動で続けてよいか。"""
+    th = item.get("thread") or []
+    if item.get("status") != PUBLISHED or not str(item.get("published_id", "")).strip() or not th:
+        return False
+    st = str(item.get("thread_state", ""))
+    if st == "done" or st.startswith("unknown") or st.startswith("posting"):
+        return False
+    if int(item.get("thread_tries", 0)) >= THREAD_MAX_TRIES:
+        return False
+    return len(item.get("thread_ids") or []) < len(th)
+
+
+def publish_thread(qpath: Path, slug: str, g, uid: str, sleep=time.sleep, clock=time.monotonic) -> dict:
+    """本文ツリーの残りを、1つ前の投稿への返信として順に出す。キューに1つずつ書き戻す。"""
+    out = {"posted": 0, "error": ""}
+    while True:
+        items = load_queue(qpath)
+        cur = find(items, slug)
+        if cur is None or not thread_pending(cur):
+            return out
+        ids = list(cur.get("thread_ids") or [])
+        n = len(ids)
+        parent = ids[-1] if ids else cur["published_id"]
+        text = cur["thread"][n]
+        phase = {"p": "container"}
+        cur.update(thread_state=f"posting:{n + 2}", updated_at=api.iso(api.now()))
+        save_queue(qpath, items)
+        try:
+            pid = publish_reply(g, uid, text, parent, sleep=sleep, clock=clock, on_phase=lambda p: phase.update(p=p))
+        except Exception as e:  # noqa: BLE001
+            msg = api.redact(e)[:300]
+            items = load_queue(qpath)
+            cur = find(items, slug)
+            if phase["p"] == "publish_call":
+                cur.update(thread_state=f"unknown:{n + 2}",
+                           thread_error=f"{n + 2}投稿目の結果不明。Threads を手で確かめてください: {msg}")
+            else:
+                cur.update(thread_state=f"failed:{n + 2}", thread_error=msg,
+                           thread_tries=int(cur.get("thread_tries", 0)) + 1)
+            cur["updated_at"] = api.iso(api.now())
+            save_queue(qpath, items)
+            print(f"返信に失敗 {slug} {n + 2}投稿目: {msg}")
+            out["error"] = msg
+            return out
+        items = load_queue(qpath)
+        cur = find(items, slug)
+        ids.append(pid)
+        done = len(ids) >= len(cur["thread"])
+        cur.update(thread_ids=ids, thread_state="done" if done else "", thread_error="", updated_at=api.iso(api.now()))
+        save_queue(qpath, items)
+        out["posted"] += 1
+        print(f"返信した {slug} {n + 2}投稿目: {pid}")
+
+
 def publish_one(g, uid: str, item: dict, stage=None, sleep=time.sleep, clock=time.monotonic,
                 on_phase=None) -> dict:
     """VIDEO コンテナを作る -> FINISHED を待つ（最大10分）-> threads_publish。
@@ -202,17 +308,7 @@ def publish_one(g, uid: str, item: dict, stage=None, sleep=time.sleep, clock=tim
     if not cid:
         raise RuntimeError("コンテナ ID が返ってこない")
     cid = api.check_id(cid)
-    start = clock()
-    while True:
-        st = g.get(cid, fields="status,error_message")
-        s = st.get("status")
-        if s == "FINISHED":
-            break
-        if s in ("ERROR", "EXPIRED"):
-            raise RuntimeError(f"コンテナ {cid} {s}: {st.get('error_message', '')}")
-        if clock() - start > POLL_TIMEOUT_S:
-            raise RuntimeError(f"コンテナ {cid} が {POLL_TIMEOUT_S} 秒以内に FINISHED にならない（status={s}）")
-        sleep(POLL_INTERVAL_S)
+    wait_container(g, cid, sleep, clock)
     if on_phase:
         on_phase("publish_call")
     pid = str(g.post(f"{uid}/threads_publish", creation_id=cid).get("id", "")).strip()
@@ -244,7 +340,11 @@ def publish_due(qpath: Path, dry_run: bool, max_n: int, graph=None, uid: str = "
         (invalid if err else targets).append((it, err))
         print(api.redact(f"{'[dry-run] ' if dry_run else ''}{'公開できない' if err else '公開対象'} "
                          f"{it.get('slug')}: {err or 'OK'}"))
-    summary = {"due": len(targets), "invalid": len(invalid), "published": [], "failed": [], "unknown": []}
+    resumes = [it["slug"] for it in items if thread_pending(it)]
+    for sl in resumes:
+        print(f"{'[dry-run] ' if dry_run else ''}本文ツリーの続き {sl}")
+    summary = {"due": len(targets), "invalid": len(invalid), "published": [], "failed": [], "unknown": [],
+               "replies": 0}
     if dry_run:
         return summary
     for it, err in invalid:
@@ -252,11 +352,13 @@ def publish_due(qpath: Path, dry_run: bool, max_n: int, graph=None, uid: str = "
         summary["failed"].append({"slug": it["slug"], "error": err})
     if invalid:
         save_queue(qpath, items)
-    if not targets:
+    if not targets and not resumes:
         return summary
     if graph is None:
         graph = api.Graph(common.require("threads_access_token"))
     uid = api.user_id(graph, uid or common.get("threads_user_id"))
+    for sl in resumes:
+        summary["replies"] += publish_thread(qpath, sl, graph, uid, sleep=sleep, clock=clock)["posted"]
 
     for it, _ in targets[:max_n]:
         slug = it["slug"]
@@ -292,6 +394,8 @@ def publish_due(qpath: Path, dry_run: bool, max_n: int, graph=None, uid: str = "
         save_queue(qpath, items)
         summary["published"].append({"slug": slug, **res})
         print(f"公開した {slug}: {res['published_id']} {res['permalink']}")
+        if cur.get("thread"):
+            summary["replies"] += publish_thread(qpath, slug, graph, uid, sleep=sleep, clock=clock)["posted"]
     return summary
 
 
@@ -364,6 +468,17 @@ def cmd_draft(a, qpath: Path) -> int:
     video = project / "final" / f"{slug}-post.mp4"
     if not a.media_url and not video.is_file():
         sys.exit(f"{video} が無い。先に assemble.py --project {project} --render を実行してください")
+    thread = None
+    if a.thread_file:
+        thf = Path(a.thread_file).expanduser()
+        if not thf.is_file():
+            thf = project / a.thread_file
+        if not thf.is_file():
+            sys.exit(f"本文ツリーのファイルが無い: {a.thread_file}")
+        thread = read_thread(thf)
+        terrs = [f"{i}投稿目: {e}" for i, part in enumerate(thread, 2) for e in validate_text(part)]
+        if terrs:
+            sys.exit("本文ツリーが不正: " + "; ".join(terrs))
     items = load_queue(qpath)
     cur = find(items, slug)
     ts = api.iso(api.now())
@@ -381,13 +496,18 @@ def cmd_draft(a, qpath: Path) -> int:
         "format": a.format if a.format is not None else cur.get("format", project_format(project)),
         "status": DRAFT, "approved_by": "", "approved_at": "", "approved_hash": "", "approval_note": "",
         "error": "", "updated_at": ts,
+        "thread": thread if thread is not None else cur.get("thread", []),
+        "thread_ids": [], "thread_state": "", "thread_error": "", "thread_tries": 0,
     })
     if a.at:
         cur["scheduled_at"] = parse_at(a.at)
     cur.setdefault("scheduled_at", "")
     save_queue(qpath, items)
     api.atomic_write_json(project / "post.json", cur)
-    print(f"下書きを保存した: {slug}（{len(text)} 文字、scheduled_at={cur['scheduled_at'] or '未設定'}）")
+    print(f"下書きを保存した: {slug}（{len(text)} 文字、本文ツリー {len(cur['thread'])} 件、"
+          f"scheduled_at={cur['scheduled_at'] or '未設定'}）")
+    for i, part in enumerate(cur["thread"], 2):
+        print(f"  {i}投稿目: {len(part)} 文字")
     print("次: 動画と本文を人に見せる。チャットで明示的に OK をもらってから `approve` を実行する")
     return 0
 
@@ -468,6 +588,14 @@ def cmd_mark_published(a, qpath: Path) -> int:
 def cmd_refresh_token(a, qpath: Path) -> int:
     token = common.require("threads_access_token")
     res = api.refresh_long_lived(token)
+    ref = common.keychain_ref(common.raw_get("threads_access_token"))
+    if ref:  # Keychain に置いている場合は Keychain を更新する
+        common.write_keychain(ref[0], ref[1], res["access_token"])
+        if common.read_keychain(*ref) != res["access_token"]:
+            sys.exit("トークンの延長: Keychain を読み戻したら一致しない")
+        days = res["expires_in"] // 86400 if res["expires_in"] else "?"
+        print(f"トークンを延長した（{days} 日）。Keychain の {ref[0]} を更新した")
+        return 0
     data = common.load_file()
     data["threads_access_token"] = res["access_token"]
     if res["expires_in"]:
@@ -496,6 +624,7 @@ def main(argv: list[str] | None = None) -> int:
     d = sub.add_parser("draft", help="プロジェクトの final/<slug>-post.mp4 から下書きを追加・更新する")
     d.add_argument("--project", required=True)
     d.add_argument("--text-file", required=True, help="投稿文のファイル（500 文字以内、リンク 5 個まで）")
+    d.add_argument("--thread-file", help="本文ツリー（`---` だけの行で区切る）。公開後に返信として順に出す")
     d.add_argument("--topic", help="トピックタグ。例 AI活用（topic_tag として送る）")
     d.add_argument("--at", help='予約時刻 "YYYY-MM-DD HH:MM"（ローカル時刻）')
     d.add_argument("--media-url", help="動画ファイルをアップロードせず、この https URL を使う")

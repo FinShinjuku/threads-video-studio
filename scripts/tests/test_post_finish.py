@@ -525,6 +525,103 @@ class CaptionTimingTest(unittest.TestCase):
         self.assertEqual(tl[1][1], 3.2)
 
 
+class ThreadGraph:
+    """動画1件＋文字の返信を順に受ける Graph の偽物。fail_reply=(n, "container"|"publish") で n 番目（1から）の返信を失敗させる。"""
+
+    def __init__(self, fail_reply=None):
+        self.calls, self.fail_reply, self.n_cont, self.n_pub, self.n_text = [], fail_reply, 0, 0, 0
+
+    def get(self, path, **params):
+        self.calls.append(("GET", path, params))
+        if path.startswith("80"):
+            return {"status": "FINISHED"}
+        return {"id": path, "permalink": "https://www.threads.net/@x/post/abc", "timestamp": "2026-10-10T03:00:00+0000"}
+
+    def post(self, path, **params):
+        self.calls.append(("POST", path, params))
+        if path.endswith("/threads"):
+            self.n_cont += 1
+            if params.get("media_type") == "TEXT":
+                self.n_text += 1  # 何番目の返信か（1から）
+                if self.fail_reply == (self.n_text, "container"):
+                    raise RuntimeError("container failed")
+            return {"id": f"{8000 + self.n_cont}"}
+        if path.endswith("/threads_publish"):
+            self.n_pub += 1  # 1回目は動画、2回目以降が返信
+            if self.fail_reply == (self.n_pub - 1, "publish"):
+                raise RuntimeError("network error during publish")
+            return {"id": f"{9000 + self.n_pub}"}
+        raise AssertionError(path)
+
+    def replies(self):
+        return [c[2] for c in self.calls if c[0] == "POST" and c[1].endswith("/threads") and c[2].get("media_type") == "TEXT"]
+
+
+class ThreadReplyTest(unittest.TestCase):
+    def setUp(self):
+        self.q = Path(tempfile.mkdtemp()) / "posts.json"
+
+    def run_due(self, items, g):
+        api.atomic_write_json(self.q, items)
+        return tp.publish_due(self.q, False, 3, graph=g, uid="42", sleep=lambda s: None, now=NOW)
+
+    def test_read_thread(self):
+        f = Path(tempfile.mkdtemp()) / "t.txt"
+        f.write_text("一つ目\n二行目\n---\n二つ目\n --- \n\n---\n三つ目\n", encoding="utf-8")
+        self.assertEqual(tp.read_thread(f), ["一つ目\n二行目", "二つ目", "三つ目"])
+
+    def test_thread_changes_need_reapproval(self):
+        it = item(thread=["a", "b"])
+        self.assertIsNone(tp.check_before_publish(it))
+        it["thread"] = ["a", "changed"]
+        self.assertIn("承認し直し", tp.check_before_publish(it))
+        self.assertEqual(tp.content_hash(item()), tp.content_hash(item(thread=[])))  # ツリーが無ければ従来と同じ
+
+    def test_replies_chain_in_order(self):
+        g = ThreadGraph()
+        s = self.run_due([item(thread=["二", "三", "四"])], g)
+        self.assertEqual(s["replies"], 3)
+        r = g.replies()
+        self.assertEqual([x["text"] for x in r], ["二", "三", "四"])
+        back = tp.load_queue(self.q)[0]
+        self.assertEqual(r[0]["reply_to_id"], back["published_id"])
+        self.assertEqual(r[1]["reply_to_id"], back["thread_ids"][0])
+        self.assertEqual(back["thread_state"], "done")
+        g2 = ThreadGraph()
+        tp.publish_due(self.q, False, 3, graph=g2, uid="42", sleep=lambda s: None, now=NOW)
+        self.assertEqual(g2.calls, [])  # 2回目は何も送らない
+
+    def test_container_failure_resumes_next_run(self):
+        self.run_due([item(thread=["二", "三"])], ThreadGraph(fail_reply=(2, "container")))
+        back = tp.load_queue(self.q)[0]
+        self.assertEqual(back["status"], "published")
+        self.assertEqual(len(back["thread_ids"]), 1)
+        self.assertTrue(back["thread_state"].startswith("failed"))
+        g = ThreadGraph()
+        tp.publish_due(self.q, False, 3, graph=g, uid="42", sleep=lambda s: None, now=NOW)
+        self.assertEqual([x["text"] for x in g.replies()], ["三"])
+        self.assertEqual(tp.load_queue(self.q)[0]["thread_state"], "done")
+
+    def test_unknown_reply_is_not_retried(self):
+        self.run_due([item(thread=["二", "三"])], ThreadGraph(fail_reply=(2, "publish")))
+        back = tp.load_queue(self.q)[0]
+        self.assertTrue(back["thread_state"].startswith("unknown"))
+        g = ThreadGraph()
+        tp.publish_due(self.q, False, 3, graph=g, uid="42", sleep=lambda s: None, now=NOW)
+        self.assertEqual(g.calls, [])
+
+
+class KeychainRefTest(unittest.TestCase):
+    def test_parse(self):
+        import common
+        self.assertIsNone(common.keychain_ref("abc"))
+        self.assertEqual(common.keychain_ref("keychain:threads-access-token@luminordia"),
+                         ("threads-access-token", "luminordia"))
+        self.assertEqual(common.keychain_ref("keychain:svc"), ("svc", ""))
+        with self.assertRaises(RuntimeError):
+            common.keychain_ref("keychain:")
+
+
 class CaptionOnlyTest(unittest.TestCase):
     def test_caption_only_timeline(self):
         cuts = [{"id": "c01", "caption": ["朝5時。", "畑はAIが耕す"], "start": 0, "dur": 2.5},
