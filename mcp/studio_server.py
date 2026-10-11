@@ -31,7 +31,7 @@ sys.path.insert(0, str(SCRIPTS))
 import common  # noqa: E402
 
 PROTOCOL = "2025-06-18"
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 OPT_PREFIX = "TVS_OPT_"
 
 
@@ -278,6 +278,18 @@ def t_qa(a):
     return run_script("qa_frames.py", args, timeout=600)
 
 
+def t_cuesheet(a):
+    args = ["--project", str(project(a["slug"]))]
+    act = a.get("action", "export")
+    if act == "check":
+        args.append("--check")
+    elif act == "import":
+        args += ["--import", a.get("file") or "cuesheet.xlsx"]
+    elif act != "export":
+        raise ValueError("action は export・check・import のどれかにする")
+    return run_script("cuesheet.py", args, timeout=120)
+
+
 def t_assemble(a):
     args = ["--project", a["slug"]] + (["--render"] if a.get("render", True) else [])
     return start_job("assemble.py", args, f"assemble {a['slug']}") if a.get("render", True) else run_script("assemble.py", args)
@@ -340,6 +352,7 @@ TOOLS = dict((t["name"], (t, f)) for t, f in [
     tool("studio_gen_voice", "有料（少額）。ナレーション全体をタイムスタンプ付きで1回で生成し、カットのタイミングを shots.json に書く。retime=true ならタイミングだけ無料で計算し直す。", {"slug": SLUG, "voice_id": S, "tag": S, "dry_run": B, "retime": B, "force": B}, ["slug"], t_gen_voice),
     tool("studio_gen_bgm", "有料。歌なしの BGM の候補を生成する。", {"slug": SLUG, "prompt": S, "seconds": N, "provider": {"type": "string", "enum": ["elevenlabs", "fal"]}, "count": N, "dry_run": B}, ["slug", "prompt"], t_gen_bgm),
     tool("studio_qa", "1カット・全カット・完成動画について、確認用のコンタクトシートを作り、止まったフレームや不自然なつなぎ目を見つける。", {"slug": SLUG, "cut": S, "final": B}, ["slug"], t_qa),
+    tool("studio_cuesheet", "無料。shots.json から、1行1カットで何秒に何を読み上げ・何を映し・素材がどこまでできたかを並べたキューシート（<作品>/cuesheet.xlsx）を作る（export）。check は抜け・尺のずれ・早口だけを確認する。import は人が書いた備考・ご指示などを shots.json に取り込む（file はプロジェクト基準のパス）。", {"slug": SLUG, "action": {"type": "string", "enum": ["export", "check", "import"]}, "file": S}, ["slug"], t_cuesheet),
     tool("studio_assemble", "字幕・BGM・CTA を組み立て、final/<slug>-final.mp4 と -post.mp4 を書き出す（バックグラウンドのジョブ）。", {"slug": SLUG, "render": B}, ["slug"], t_assemble),
     tool("studio_post", "Threads の投稿キュー。action=status|draft|approve|schedule|publish_due。'approve' は本人がチャットで明示的に OK と言ったときだけ使い、その言葉を note に渡す。投稿は取り消せない。", {"action": {"type": "string", "enum": ["status", "draft", "approve", "schedule", "publish_due"]}, "slug": SLUG, "topic": S, "at": S, "hook": S, "format": S, "by": S, "note": S, "dry_run": B, "max": N}, ["action"], t_post),
     tool("studio_insights", "Threads の数値を取得する（pull）か、48時間・7日の振り返りを書く（review）。", {"action": {"type": "string", "enum": ["pull", "review"]}}, [], t_insights),

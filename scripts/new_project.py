@@ -39,6 +39,10 @@ def make_shots(slug: str, vtype: str, n: int, sec: float) -> dict:
     for i in range(1, n + 1):
         cuts.append({
             "id": f"c{i:02d}",
+            "chapter": "",
+            "asset_id": "",
+            "picture": "",
+            "kind": "ai",
             "line": "",
             "caption": [],
             "action": "",
@@ -50,6 +54,7 @@ def make_shots(slug: str, vtype: str, n: int, sec: float) -> dict:
             "refs": [],
             "start": round(t, 2),
             "dur": sec,
+            "note": "",
         })
         t += sec
     return {

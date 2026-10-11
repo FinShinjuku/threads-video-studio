@@ -18,6 +18,8 @@ description: "Threads 向け縦型動画の企画と絵コンテ。言いたい�
 - `caption`：字幕。1枚1〜2行・1行15字前後。強調は `[[ ]]` で1語だけ。
 - `action`：被写体の動作を**1つ**。`camera`：カメラの動きを**1つ**。
 - `prompt`：動画プロンプト（下の型）。`model`：`generate-cuts` の表から選ぶ。
+- `picture`：絵の内容を日本語1文で（人が読んで分かる言葉。プロンプトの訳ではなく、何が映るか）。
+- `chapter`：章（つかみ・本題・オチなど）。`kind`：素材の種類（ai／text＝文字カット／screen＝画面収録／footage＝実写）。AI で作らないカットは `prompt` を空でよい。
 - 冒頭1.5秒で手を止めさせる絵か一言を、C1 に置く。
 
 ### 動画プロンプトの型（英語で書く）
@@ -29,6 +31,15 @@ Natural motion, no morphing, no extra characters, no objects appearing in hands,
 ```
 - 「〜しない」の指定は最後の1文にまとめ、それ以外は肯定の形で書く（「建物なし」ではなく「何もない草原」）。
 - 秒刻みの細かい指定は書かない（守られないことが多い）。1カット1動作にする方が確実。
+
+## 2.5 キューシート（流れを1枚の表にする）
+カット表ができたら、動画全体の流れを1行1カットの表にする。何秒から何秒まで、何を読み上げ、何を映し、素材がどこまでできているかを、人が1枚で確かめられるようにするため。
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cuesheet.py --project <dir>          # <dir>/cuesheet.xlsx（無料）
+```
+- 書き出すと「確認」が出る（空欄・開始と秒数のずれ・1秒あたり6字を超える早口・型の目安から外れた尺）。**確認が0件になるまで直してから**承認に出す。
+- 人が表の「備考・ご指示」に書いて戻したら `--import <xlsx>` で取り込み、`note` を読んで直す。ナレ・字幕・プロンプトが表の上で書き換えられていたら、自動では反映されないので、本人に確かめてから shots.json を直す。
+- 作り直すたびに書き出し直す：ナレで尺が決まったあと（`start`・`dur` が入る）、生成のあと（状態の列が進む）、仕上げの前。
 
 ## 3. 自己採点（承認に出す前に必ず行う）
 各カットのプロンプトを `references/prompt-rubric.md` で採点する。**必須項目に1つでも×があれば、直してから出す。**
@@ -44,7 +55,7 @@ Natural motion, no morphing, no extra characters, no objects appearing in hands,
 ## 5. 承認パケット（G1）
 次の5点を**1回でまとめて**見せ、明示の OK をもらう。
 1. 言いたいこと1文・型・総尺
-2. カット表（画像・動作・カメラ・ナレ・字幕）
+2. キューシート（`cuesheet.xlsx`。Mac は `open <dir>/cuesheet.xlsx`）とラフ画像
 3. ナレ原稿の全文（読みに注意が要る語は印を付ける）
 4. 自己採点の結果
 5. 見積もり：`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gen_video.py --project <dir> --all --dry-run --with-draft`（下書きと本番の合計）
