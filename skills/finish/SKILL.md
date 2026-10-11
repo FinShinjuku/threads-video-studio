@@ -7,14 +7,42 @@ description: "生成したカット・ナレ・BGM から完成動画を組み�
 
 
 ## 1. BGM（シリーズで使い回す）
-- 毎回作らず、**シグネチャー曲を3本**決めて使い回す（例：前向き・温かい・静か）。初回だけ3本作って人に選んでもらう。
-  ```bash
-  python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gen_bgm.py --project <dir> --seconds 45 \
-    --prompt "Warm acoustic pop, ukulele and light piano, 100 BPM, hopeful, clear resolving ending, no vocals, leaves room for narration"
-  ```
+- 毎回作らず、**シグネチャー曲を3本**決めて使い回す（例：前向き・温かい・静か）。
 - ボーカル無し。ナレと同じ帯域の楽器が前に出ない。最後は解決して終わる曲にする。
-- 選んだ曲を `bgm/bgm.mp3` に置く。シグネチャー曲はワークスペースの `bgm-library/` に保存して使い回す。
 - 決め台詞やつかみの瞬間を、曲の小節の頭に合わせると気持ちよく見える。
+
+### 1-1. まず無料の BGM 素材から探す（費用0円）
+1. 商用利用できる無料の BGM 素材サイト（例：OpenTracks〈旧 DOVA-SYNDROME〉、甘茶の音楽工房、魔王魂など）で、`world.md` の楽器・温度に合う曲を2〜3曲探し、URL を人に見せて選んでもらう。
+2. **使う前に規約を確かめる**（サイトの利用規約と、曲ごと・作者ごとの条件。作者の条件があればそちらが優先されることが多い）。確かめる点：商用利用／SNS 動画での利用（Threads の名前が無ければ「その他のオンライン配信」に入るかを人が判断する）／クレジット表記の要否／切り出し・ループ・フェードの可否／禁止事項。
+3. **ダウンロードは人が行う**（素材サイトから自動で一括取得しない）。元のファイルを `bgm/original.mp3` に置き、使う区間を切り出して `bgm/bgm.mp3` にする：
+   ```bash
+   ffmpeg -ss <開始秒> -t <動画の長さ+1> -i bgm/original.mp3 -af "afade=t=in:d=0.3,afade=t=out:st=<動画の長さ-0.7>:d=1" bgm/bgm.mp3
+   ```
+4. 出どころを `bgm/SOURCE.md` に書く（後から規約を確かめ直せるようにするため）：
+   ```markdown
+   - 曲名 / 作者: <曲名> / <作者>
+   - URL: <曲のページ>
+   - サイトの規約: <規約の URL>（確かめた日: YYYY-MM-DD）
+   - 作者ごとの条件: <あり（内容）／サイトの規約に準拠>
+   - クレジット表記: <要（文言）／不要>
+   - 使った区間: <開始〜終了>、加工: <切り出し・フェード>
+   ```
+5. クレジット表記が要る曲なら、その文言を投稿本文に入れる。
+- **曲のファイルは公開の場所に置かない**（GitHub・プラグイン・共有ドライブの公開フォルダなど）。多くの素材サイトは再配布・AI の学習への利用・ツールへの組み込みを禁じている。置くのは作品フォルダと、手元の `bgm-library/`（ワークスペース内）だけ。
+- 音のロゴ（1.5秒以内の短い音）も、まず同じサイトの効果音から探す。BGM の終わりに重ねる：
+  ```bash
+  ffmpeg -i bgm/bgm.mp3 -i bgm/sting.mp3 -filter_complex "[1]adelay=<鳴らす秒×1000>|<同じ値>[s];[0][s]amix=inputs=2:duration=first:normalize=0" bgm/bgm-with-sting.mp3
+  ```
+  （確かめたら `bgm/bgm.mp3` と置き換える。元は残す。）
+
+### 1-2. 合う曲が無いときだけ AI で作る（有料）
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gen_bgm.py --project <dir> --seconds 45 \
+  --prompt "Warm acoustic pop, ukulele and light piano, 100 BPM, hopeful, clear resolving ending, no vocals, leaves room for narration"
+```
+- 候補を人に選んでもらい、`bgm/bgm.mp3` に置く。`bgm/SOURCE.md` には「AI 生成（サービス名・日付・プロンプト）」と書く。
+
+選んだ曲（素材でも AI でも）はワークスペースの `bgm-library/` に `SOURCE.md` と一緒に保存して使い回す。
 
 ## 2. 組み立てと書き出し
 ```bash
