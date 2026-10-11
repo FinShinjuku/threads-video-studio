@@ -32,6 +32,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/setup.py status
 ## 3. 道具（入れるのは本人。Claude は自分で入れない）
 足りない道具があれば、`studio_status`（または `setup.py status`）の結果を見せて、下の入れ方を案内する。インストールは本人に行ってもらう。
 - `ffmpeg`（Mac：`brew install ffmpeg`）、Node.js 18 以上（HyperFrames の書き出し）
+  - `ffmpeg` が「壊れている（Library not loaded …）」と出たら、Homebrew で別の道具を入れたときに共有ライブラリだけが新しくなったのが原因のことが多い。本人に `brew upgrade ffmpeg`（直らなければ `brew reinstall ffmpeg`）を案内する。
 - `pip install pyopenjtalk`（読みの事前チェック。無くても簡易チェックで動く）
 - 自動投稿をするなら AWS CLI と、非公開のバケット：`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/media_host.py --create-bucket`（公開ブロック・暗号化・1日で自動削除）
 
