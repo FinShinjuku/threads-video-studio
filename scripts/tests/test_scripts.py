@@ -122,6 +122,25 @@ class TestVideoRegistry(unittest.TestCase):
 
 
 class TestTaskResume(unittest.TestCase):
+    def test_caption_only_cut_needs_no_line(self):
+        shots = {"type": "short", "cuts": [
+            {"id": "c01", "picture": "畑", "caption": ["朝5時。"], "line": "", "action": "a", "camera": "static",
+             "prompt": "p", "start": 0.0, "dur": 3.0},
+            {"id": "c02", "picture": "縁側", "caption": [], "line": "", "action": "a", "camera": "static",
+             "prompt": "p", "start": 3.0, "dur": 3.0}]}
+        issues = "\n".join(cuesheet.check(shots))
+        self.assertNotIn("c01: ナレーションが空", issues)  # 字幕だけの短い動画
+        self.assertIn("c02: ナレーションが空", issues)
+
+    def test_estimate_without_frames(self):
+        with tempfile.TemporaryDirectory() as d:
+            proj = Path(d)
+            cuts = {"c01": {"id": "c01", "prompt": "p", "model": "kling30", "frame": "frames/c01.png", "dur": 2.5}}
+            jobs = gen_video.plan_jobs(proj, cuts, ["c01"], None, None, False, False, estimate_only=True)
+            self.assertEqual(jobs[0].seconds, 3)
+            with self.assertRaises(FileNotFoundError):  # 生成するときは起点画像が要る
+                gen_video.plan_jobs(proj, cuts, ["c01"], None, None, False, False)
+
     def test_states(self):
         with tempfile.TemporaryDirectory() as d:
             clips = Path(d)
