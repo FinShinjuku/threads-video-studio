@@ -1,6 +1,6 @@
 {
   "name": "threads-video-studio",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Threads 向けの縦型 AI 動画（アニメ調・日本語ナレーション・字幕・BGM・誘導ボタン）を作り、予約投稿して振り返る。人の承認ゲート、コマ単位の確認、自動投稿つき。fal.ai・ElevenLabs・Threads API を使う。",
   "author": {
     "name": "FinShinjuku"
