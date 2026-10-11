@@ -4,7 +4,7 @@
 入力（プロジェクトフォルダ）:
   shots.json         カット（start/dur は gen_voice.py が入れる）、line / caption、cta
   clips/<cut>.mp4    生成したクリップ（クリップが無ければ frames/<cut>.png を静止画として使う）
-  voice/all.mp3      通しのナレーション1本
+  voice/all.mp3      通しのナレーション1本（どのカットにも line が無い、字幕だけの動画なら不要）
   voice/lines.json   行ごとのタイミング [{"cut": "c01", "start": 0.2, "end": 4.8, ...}, ...]
   bgm/bgm.mp3        BGM（任意）
 
@@ -341,10 +341,11 @@ def build(project: Path, bgm_db: float = 0.0) -> dict:
         if c.get("start") is None or not c.get("dur"):
             raise RuntimeError(f"{c.get('id')}: start/dur が無い。先に gen_voice.py を実行する（タイミングを入れる）")
     narration = project / "voice" / "all.mp3"
-    if not narration.exists():
+    has_lines = any(str(c.get("line") or "").strip() for c in cuts)
+    if not narration.exists() and has_lines:
         raise RuntimeError("voice/all.mp3 が無い。先に gen_voice.py を実行する")
     lines = load_lines(project)
-    narr_dur = common.duration(narration)
+    narr_dur = common.duration(narration) if narration.exists() else 0.0  # 字幕だけの動画はナレなし
     cut_end = max(float(c["start"]) + float(c["dur"]) for c in cuts)
     total = round(max(cut_end, narr_dur + 0.4), 2)
 
@@ -414,14 +415,18 @@ def build(project: Path, bgm_db: float = 0.0) -> dict:
         cta_html, cta_js, cta_size = "      <!-- CTA は非表示（cta.show=false） -->", "", 56
 
     # 音声
-    shutil.copy2(narration, assets / "narration.mp3")
-    audio = [f'      <audio id="narration" src="assets/narration.mp3" data-start="0" data-duration="{narr_dur:.2f}" '
-             f'data-track-index="10" data-volume="1"></audio>']
+    if narration.exists():
+        shutil.copy2(narration, assets / "narration.mp3")
+        audio = [f'      <audio id="narration" src="assets/narration.mp3" data-start="0" data-duration="{narr_dur:.2f}" '
+                 f'data-track-index="10" data-volume="1"></audio>']
+    else:
+        (assets / "narration.mp3").unlink(missing_ok=True)
+        audio = ["      <!-- ナレーションなし（字幕だけ） -->"]
     bgm_src = project / "bgm" / "bgm.mp3"
     wins = []
     if bgm_src.exists():
         wins = prep_bgm(bgm_src, lines, total, assets / "bgm.wav", bgm_db)
-        if not lines:
+        if not lines and narration.exists():
             warnings.append("警告 BGM: voice/lines.json が無いので、ナレーションの間も BGM を下げていない")
         audio.append(f'      <audio id="bgm" src="assets/bgm.wav" data-start="0" data-duration="{total:.2f}" '
                      f'data-track-index="11" data-volume="1"></audio>')
