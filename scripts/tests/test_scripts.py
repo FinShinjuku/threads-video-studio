@@ -540,3 +540,32 @@ class ToolHealthTest(unittest.TestCase):
             finally:
                 os.environ["PATH"] = old
 
+
+class MultiSpeakerTest(unittest.TestCase):
+    def test_single_speaker_keeps_old_path(self):
+        import gen_voice
+        self.assertIsNone(gen_voice.speaker_plan({"cuts": [{"id": "c01"}, {"id": "c02"}]}))
+
+    def test_plan_groups_by_speaker(self):
+        import gen_voice
+        shots = {"speakers": {"narrator": {"voice_id": "n"}, "ai": {"voice_id": "a"}},
+                 "cuts": [{"id": "c01"}, {"id": "c02", "speaker": "ai"}, {"id": "c03"}]}
+        self.assertEqual(gen_voice.speaker_plan(shots), {"narrator": [0, 2], "ai": [1]})
+        with self.assertRaises(RuntimeError):
+            gen_voice.speaker_plan({"cuts": [{"id": "c01", "speaker": "ai"}, {"id": "c02"}]})
+
+    def test_lay_out_and_timing(self):
+        import gen_voice
+        cuts = [{"id": "c01"}, {"id": "c02", "speaker": "ai", "pause_before": 1.0}, {"id": "c03"}]
+        plan = {"narrator": [0, 2], "ai": [1]}
+        spans_by = {"narrator": [(0.1, 2.1), (3.0, 4.0)], "ai": [(0.2, 1.7)]}
+        spans, pieces = gen_voice.lay_out(cuts, plan, spans_by)
+        self.assertEqual(spans[0], (0.15, 2.25))  # 各音声の最初の行は頭から使う（終わりは元の 2.1 秒）
+        self.assertAlmostEqual(spans[1][0], 2.25 + 0.25 + 1.0, places=2)   # 間＋pause_before（ai の最初の行も頭から）
+        self.assertAlmostEqual(spans[2][0], spans[1][1] + 0.25 + 0.15, places=2)  # 2行目以降は前の余白の分
+        self.assertEqual(pieces[0][1], 0.0)
+        self.assertEqual([p[0] for p in pieces], ["narrator", "ai", "narrator"])
+        timing = gen_voice.cut_timing(spans, pre=[0, 1.0, 0])
+        self.assertAlmostEqual(timing[1][0], spans[1][0] - 0.15 - 1.0, places=2)  # 間の分だけ前からカットを始める
+        self.assertAlmostEqual(sum(timing[0]), timing[1][0], places=3)
+
