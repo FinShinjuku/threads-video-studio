@@ -140,6 +140,8 @@ def check(shots: dict) -> list[str]:
                            ("camera", "カメラ"), ("prompt", "動画プロンプト")):
             if c.get("kind") in ("text", "screen", "footage") and key in ("action", "camera", "prompt"):
                 continue  # AI で生成しないカットに動画プロンプトは要らない
+            if key == "line" and any(str(t).strip() for t in c.get("caption") or []):
+                continue  # 字幕があればナレなし（字幕だけの短い動画）でよい
             if not str(c.get(key) or "").strip():
                 issues.append(f"{cid}: {label}が空")
         if dur <= 0:

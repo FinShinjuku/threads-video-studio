@@ -378,8 +378,8 @@ def run_job(job: Job, timeout: int) -> str:
 # --- main --------------------------------------------------------------------------------------
 
 def plan_jobs(project: Path, cuts: dict, ids: list[str], model_arg: str | None, res_arg: str | None,
-              draft: bool, force: bool, variants: int | None = None) -> list[Job]:
-    jobs = []
+              draft: bool, force: bool, variants: int | None = None, estimate_only: bool = False) -> list[Job]:
+    jobs, missing = [], set()
     for cid in ids:
         cut = cuts[cid]
         model, res = pick_model_and_res(cut, model_arg, res_arg, draft)
@@ -388,9 +388,16 @@ def plan_jobs(project: Path, cuts: dict, ids: list[str], model_arg: str | None, 
             if job.state in ("new", "locked"):
                 if not job.prompt:
                     raise ValueError(f"{cid}: shots.json の prompt が空")
-                check_inputs(cut, project, model)
+                try:
+                    check_inputs(cut, project, model)
+                except FileNotFoundError as e:
+                    if not estimate_only:
+                        raise
+                    missing.add(str(e))  # 見積もりは起点画像の清書前（G1）にも出せるようにする
                 build_body(model, cut, project, job.prompt, job.seconds, res, images=False)  # 項目の検証だけ
             jobs.append(job)
+    for msg in sorted(missing):
+        say(f"注意: {msg}（見積もりだけ出す。生成の前に用意する）")
     return jobs
 
 
@@ -447,14 +454,14 @@ def main() -> None:
             raise ValueError(f"不明なカット {cid!r}。使える値: {', '.join(cuts)}")
 
     if a.with_draft:
-        drafts = plan_jobs(project, cuts, ids, a.model, None, True, a.force, a.variants)
-        finals = plan_jobs(project, cuts, ids, a.model, a.resolution, False, a.force)
+        drafts = plan_jobs(project, cuts, ids, a.model, None, True, a.force, a.variants, estimate_only=True)
+        finals = plan_jobs(project, cuts, ids, a.model, a.resolution, False, a.force, estimate_only=True)
         _warn_deprecated(drafts + finals)
         total = print_plan("下書き", drafts) + print_plan("本番", finals)
         print(f"合計（下書き + 本番）: ${total:.2f}")
         return
 
-    jobs = plan_jobs(project, cuts, ids, a.model, a.resolution, a.draft, a.force, a.variants)
+    jobs = plan_jobs(project, cuts, ids, a.model, a.resolution, a.draft, a.force, a.variants, estimate_only=a.dry_run)
     _warn_deprecated(jobs)
     print_plan("", jobs)
     todo = [j for j in jobs if j.state != "done"]
