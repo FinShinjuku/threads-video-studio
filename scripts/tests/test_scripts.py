@@ -403,10 +403,10 @@ class TestReviewFixes(unittest.TestCase):
                 gen_video.check_inputs(dict(cut, frame="/etc/hosts"), Path(d), "seedance20")
 
     def test_deprecation(self):
-        self.assertEqual(gen_video.MODELS["veo31-fast"]["deprecated"], "2026-10-22")
-        self.assertEqual(gen_video.MODELS["veo31-fast-flf"]["deprecated"], "2026-10-22")
+        self.assertEqual(gen_video.MODELS["veo31-fast"]["deprecated"], "2026-11-17")
+        self.assertEqual(gen_video.MODELS["veo31-fast-flf"]["deprecated"], "2026-11-17")
         self.assertIn("廃止予定", gen_video.deprecation_warning("veo31-fast", "2026-10-10"))
-        self.assertIn("廃止済み", gen_video.deprecation_warning("veo31-fast-flf", "2026-10-23"))
+        self.assertIn("廃止済み", gen_video.deprecation_warning("veo31-fast-flf", "2026-11-18"))
         self.assertIsNone(gen_video.deprecation_warning("seedance20"))
         self.assertEqual(gen_video.MODELS["kling30"]["durations"], list(range(3, 16)))
         self.assertIsNone(gen_video.MODELS["kling30"]["aspect_ratio"])
