@@ -2,7 +2,7 @@
 
 | サービス | 用途 | 設定 | 必須 | 入手方法 |
 |---|---|---|---|---|
-| [fal.ai](https://fal.ai) | 画像（Seedream 4.5、Nano Banana Pro）、動画（Seedance 2.0、Kling 3.0。Veo 3.1 Fast は fal で 2026-10-22 に廃止予定）、BGM | `fal_key` | 必須 | ダッシュボード → Keys で発行。**Auto top-up（自動チャージ）をオンに**してください。残高切れでロックされている間に完成した生成結果は、あとから受け取れません。 |
+| [fal.ai](https://fal.ai) | 画像（Seedream 4.5、Nano Banana Pro）、動画（Seedance 2.0、Kling 3.0。Veo 3.1 Fast は fal で 2026-11-17 に廃止予定）、BGM | `fal_key` | 必須 | ダッシュボード → Keys で発行。**Auto top-up（自動チャージ）をオンに**してください。残高切れでロックされている間に完成した生成結果は、あとから受け取れません。 |
 | [ElevenLabs](https://elevenlabs.io) | 日本語ナレーション（`eleven_v3`、文字ごとの時刻つき）、BGM | `elevenlabs_api_key`、`narrator_voice_id` | 必須 | Settings → API keys で発行。Voice Library から日本語ネイティブの声を追加して、その ID を控えます。 |
 | [Threads API](https://developers.facebook.com/docs/threads) | 予約投稿、反応の取り込み | `threads_access_token`、`threads_user_id`（任意） | 投稿するなら | Meta のアプリを Threads の用途で作り、長期トークンを発行します。`threads_post.py refresh-token` で延長できます。 |
 | AWS S3 | 手元の動画を、1時間だけ有効な URL で Threads API に渡す | `media_bucket`、`aws_profile`、`aws_region` | 動画を自動投稿するなら | `python3 scripts/media_host.py --create-bucket` で、非公開・暗号化・1日で自動削除のバケットを作れます。 |

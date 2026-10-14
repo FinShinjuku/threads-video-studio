@@ -76,7 +76,7 @@ MODELS: dict[str, dict] = {
         "resolutions": ["720p", "1080p", "4k"], "default_resolution": "720p",
         "aspect_ratio": "9:16", "audio_key": "generate_audio",
         "draft": ("veo31-fast", "720p"),
-        "deprecated": "2026-10-22",            # fal の API ページの記載: "This endpoint will be deprecated on October 22, 2026."
+        "deprecated": "2026-11-17",            # fal の掲示（starts_with "fal-ai/veo3.1/"）: "This endpoint will be deprecated on November 17, 2026."（2026-10-14 確認）
         # 音声なしの1秒あたり USD、2026-10-10 確認
         "usd_per_sec": {"720p": 0.10, "1080p": 0.10, "4k": 0.30},
     },
@@ -88,7 +88,7 @@ MODELS: dict[str, dict] = {
         "resolutions": ["720p", "1080p", "4k"], "default_resolution": "720p",
         "aspect_ratio": "9:16", "audio_key": "generate_audio",
         "draft": ("veo31-fast-flf", "720p"),
-        "deprecated": "2026-10-22",            # fal の API ページの記載: "This endpoint will be deprecated on October 22, 2026."
+        "deprecated": "2026-11-17",            # fal の掲示（starts_with "fal-ai/veo3.1/"）: "This endpoint will be deprecated on November 17, 2026."（2026-10-14 確認）
         # 音声なしの1秒あたり USD、2026-10-10 確認
         "usd_per_sec": {"720p": 0.10, "1080p": 0.10, "4k": 0.30},
     },

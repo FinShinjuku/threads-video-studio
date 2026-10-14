@@ -15,7 +15,7 @@ description: "起点画像からカットごとの動画を生成する。カッ
 | 情景（人物なし）・カメラワークが主役 | `seedance20-fast` | `seedance20-ref`（参照画像モード） | カメラの線を描いた参照画像を使う方法もある |
 | 複数人物・大きな動き | — | `kling30` | 人物の動きと物理表現に強い |
 
-`veo31-fast` / `veo31-fast-flf` は fal で 2026-10-22 に廃止予定のため、既定では使わない（使うと警告が出る）。
+`veo31-fast` / `veo31-fast-flf` は fal で 2026-11-17 に廃止予定のため、既定では使わない（使うと警告が出る）。
 単価・許容秒数・解像度は改定が速いので、**生成前に必ず `--dry-run` で見積もる**（スクリプトが各モデルの許容値と単価を持っている）。
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gen_video.py --project <dir> --all --draft --dry-run   # 下書きの見積もり
